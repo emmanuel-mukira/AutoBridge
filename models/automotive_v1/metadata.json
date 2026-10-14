@@ -1,0 +1,141 @@
+{
+  "model_version": "automotive_v1",
+  "probability_output": "raw Won probability; class 1 is Won",
+  "classification_threshold_for_academic_reporting": 0.23168,
+  "primary_features": [
+    "Opportunity Amount USD",
+    "Revenue From Client Past Two Years",
+    "Route To Market",
+    "Supplies Group",
+    "Supplies Subgroup"
+  ],
+  "fallback_features": [
+    "Opportunity Amount USD",
+    "Route To Market",
+    "Supplies Group",
+    "Supplies Subgroup"
+  ],
+  "amount_preprocessing": [
+    "log1p",
+    "StandardScaler"
+  ],
+  "random_forest": {
+    "bootstrap": true,
+    "ccp_alpha": 0.0,
+    "class_weight": null,
+    "criterion": "gini",
+    "max_depth": 12,
+    "max_features": 0.8,
+    "max_leaf_nodes": null,
+    "max_samples": null,
+    "min_impurity_decrease": 0.0,
+    "min_samples_leaf": 30,
+    "min_samples_split": 2,
+    "min_weight_fraction_leaf": 0.0,
+    "monotonic_cst": null,
+    "n_estimators": 200,
+    "n_jobs": 2,
+    "oob_score": false,
+    "random_state": 42,
+    "verbose": 0,
+    "warm_start": false
+  },
+  "primary_encoder_categories": {
+    "Revenue From Client Past Two Years": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "Route To Market": [
+      "Fields Sales",
+      "Other",
+      "Reseller",
+      "Telecoverage",
+      "Telesales"
+    ],
+    "Supplies Group": [
+      "Car Accessories",
+      "Car Electronics",
+      "Performance & Non-auto",
+      "Tires & Wheels"
+    ],
+    "Supplies Subgroup": [
+      "Batteries & Accessories",
+      "Car Electronics",
+      "Exterior Accessories",
+      "Garage & Car Care",
+      "Interior Accessories",
+      "Motorcycle Parts",
+      "Replacement Parts",
+      "Shelters & RV",
+      "Tires & Wheels",
+      "Towing & Hitches"
+    ]
+  },
+  "fallback_encoder_categories": {
+    "Route To Market": [
+      "Fields Sales",
+      "Other",
+      "Reseller",
+      "Telecoverage",
+      "Telesales"
+    ],
+    "Supplies Group": [
+      "Car Accessories",
+      "Car Electronics",
+      "Performance & Non-auto",
+      "Tires & Wheels"
+    ],
+    "Supplies Subgroup": [
+      "Batteries & Accessories",
+      "Car Electronics",
+      "Exterior Accessories",
+      "Garage & Car Care",
+      "Interior Accessories",
+      "Motorcycle Parts",
+      "Replacement Parts",
+      "Shelters & RV",
+      "Tires & Wheels",
+      "Towing & Hitches"
+    ]
+  },
+  "primary_transformed_feature_order": [
+    "categorical__Revenue From Client Past Two Years_0",
+    "categorical__Revenue From Client Past Two Years_1",
+    "categorical__Revenue From Client Past Two Years_2",
+    "categorical__Revenue From Client Past Two Years_3",
+    "categorical__Revenue From Client Past Two Years_4",
+    "categorical__Route To Market_Fields Sales",
+    "categorical__Route To Market_Other",
+    "categorical__Route To Market_Reseller",
+    "categorical__Route To Market_Telecoverage",
+    "categorical__Route To Market_Telesales",
+    "categorical__Supplies Group_Car Accessories",
+    "categorical__Supplies Group_Car Electronics",
+    "categorical__Supplies Group_Performance & Non-auto",
+    "categorical__Supplies Group_Tires & Wheels",
+    "categorical__Supplies Subgroup_Batteries & Accessories",
+    "categorical__Supplies Subgroup_Car Electronics",
+    "categorical__Supplies Subgroup_Exterior Accessories",
+    "categorical__Supplies Subgroup_Garage & Car Care",
+    "categorical__Supplies Subgroup_Interior Accessories",
+    "categorical__Supplies Subgroup_Motorcycle Parts",
+    "categorical__Supplies Subgroup_Replacement Parts",
+    "categorical__Supplies Subgroup_Shelters & RV",
+    "categorical__Supplies Subgroup_Tires & Wheels",
+    "categorical__Supplies Subgroup_Towing & Hitches",
+    "amount__Opportunity Amount USD"
+  ],
+  "validation_metrics": {
+    "ROC-AUC": 0.82083,
+    "Average Precision": 0.60763,
+    "Brier Score": 0.12921
+  },
+  "test_metrics": {
+    "ROC-AUC": 0.81441,
+    "Average Precision": 0.60221,
+    "Brier Score": 0.13079
+  }
+}
