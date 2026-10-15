@@ -1,0 +1,17 @@
+# TazamaTech CRM - Robots.txt
+# Allow all crawlers to access public pages
+
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /signup
+
+# Disallow admin and dashboard routes
+Disallow: /dashboard/
+Disallow: /api/
+
+# Crawl delay (optional)
+Crawl-delay: 1
+
+# Sitemap location (update with your production domain)
+# Sitemap: https://yourdomain.com/sitemap.xml

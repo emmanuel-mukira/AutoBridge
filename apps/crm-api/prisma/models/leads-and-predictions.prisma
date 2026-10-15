@@ -1,0 +1,120 @@
+enum LeadOrigin {
+  UNKNOWN
+  WEBSITE_SUBMISSION
+  PHONE_CALL
+  EMAIL_INQUIRY
+  REFERRAL
+  SALES_REP_OUTREACH
+  WALK_IN
+
+  @@schema("crm")
+}
+
+enum EstimatedBudgetRange {
+  UNKNOWN
+  BELOW_500K
+  FROM_500K_TO_1M @map("500K_1M")
+  FROM_1M_TO_3M   @map("1M_3M")
+  FROM_3M_TO_5M   @map("3M_5M")
+  ABOVE_5M
+
+  @@schema("crm")
+}
+
+enum NeedLevel {
+  UNKNOWN
+  LOW
+  MODERATE
+  HIGH
+  CRITICAL
+
+  @@schema("crm")
+}
+
+enum BudgetStatus {
+  UNKNOWN
+  NO_BUDGET
+  BUDGET_ESTIMATED
+  BUDGET_CONFIRMED
+
+  @@schema("crm")
+}
+
+enum LeadStage {
+  NEW
+  ACTIVE
+  QUOTED
+  ON_HOLD
+
+  @@schema("crm")
+}
+
+enum FinalStatus {
+  WON
+  LOST
+
+  @@schema("crm")
+}
+
+enum PredictionPriority {
+  HIGH
+  MEDIUM
+  LOW
+
+  @@schema("crm")
+}
+
+model Lead {
+  id                      Int                  @id @default(autoincrement())
+  companyId               Int                  @map("company_id")
+  customerId              Int                  @map("customer_id")
+  contactPersonId         Int?                 @map("contact_person_id")
+  salesRepId              Int                  @map("sales_rep_id")
+  generatorRecommended    String?              @map("generator_recommended")
+  generatorRecommendedKva Decimal?             @map("generator_recommended_kva") @db.Decimal(10, 2)
+  leadOrigin              LeadOrigin           @default(UNKNOWN) @map("lead_origin")
+  estimatedBudgetRange    EstimatedBudgetRange @default(UNKNOWN) @map("estimated_budget_range")
+  needLevel               NeedLevel            @default(UNKNOWN) @map("need_level")
+  budgetStatus            BudgetStatus         @default(UNKNOWN) @map("budget_status")
+  leadStage               LeadStage            @default(NEW) @map("lead_stage")
+  finalStatus             FinalStatus?         @map("final_status")
+  outcomeAt               DateTime?            @map("outcome_at")
+  createdAt               DateTime             @default(now()) @map("created_at")
+  updatedAt               DateTime             @default(now()) @updatedAt @map("updated_at")
+
+  company       Company          @relation(fields: [companyId], references: [id])
+  customer      Customer         @relation(fields: [customerId], references: [id])
+  contactPerson CustomerContact? @relation(fields: [contactPersonId], references: [id])
+  salesRep      User             @relation(fields: [salesRepId], references: [id])
+  quotations    Quotation[]
+  interactions  Interaction[]
+  predictions   Prediction[]
+  callPlans     CallPlan[]
+
+  @@unique([id, companyId])
+  @@index([customerId, leadStage, createdAt])
+  @@index([customerId, generatorRecommended])
+  @@index([salesRepId, leadStage])
+  @@index([contactPersonId])
+  @@map("leads")
+  @@schema("crm")
+}
+
+model Prediction {
+  id              Int                @id @default(autoincrement())
+  companyId       Int                @map("company_id")
+  leadId          Int                @map("lead_id")
+  modelVersion    String             @map("model_version")
+  probability     Decimal            @db.Decimal(5, 4)
+  priority        PredictionPriority
+  predictedAt     DateTime           @default(now()) @map("predicted_at")
+  featureSnapshot Json               @map("feature_snapshot")
+  shapExplanation Json               @map("shap_explanation")
+
+  company Company @relation(fields: [companyId], references: [id])
+  lead    Lead    @relation(fields: [leadId, companyId], references: [id, companyId])
+
+  @@index([companyId, leadId, predictedAt])
+  @@map("predictions")
+  @@schema("crm")
+}

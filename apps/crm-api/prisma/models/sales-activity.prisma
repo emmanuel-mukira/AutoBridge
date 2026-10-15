@@ -1,0 +1,151 @@
+enum CallPurpose {
+  Prospective
+  Selling
+  Coverage
+  Collection
+  Complaint
+
+  @@schema("crm")
+}
+
+enum CallLocationType {
+  Customer_Office
+  Customer_Site
+  Hotel
+  Dealer_Branch
+
+  @@schema("crm")
+}
+
+enum ProductLine {
+  Parts
+  Electrical
+  Hardware
+  Generator
+  Small_Workers
+
+  @@schema("crm")
+}
+
+enum InteractionType {
+  CALL
+  EMAIL
+  MEETING
+  SITE_VISIT
+  FOLLOW_UP
+
+  @@schema("crm")
+}
+
+enum InteractionSignal {
+  PAYMENT_TERMS_DISCUSSED
+  GENERATOR_VIEWING_REQUESTED
+  SECOND_HAND_REQUEST
+  PROCUREMENT_PROCESS_STARTED
+  MEETING_POSTPONED
+  QUOTATION_REQUESTED
+
+  @@schema("crm")
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  SUPERSEDED
+
+  @@schema("crm")
+}
+
+model CallPlan {
+  id                Int              @id @default(autoincrement())
+  companyId         Int              @map("company_id")
+  salesRepId        Int              @map("sales_rep_id")
+  customerId        Int              @map("customer_id")
+  leadId            Int?             @map("lead_id")
+  contactPersonId   Int?             @map("contact_person_id")
+  weekBeginning     DateTime         @map("week_beginning")
+  dayOfWeek         String           @map("day_of_week")
+  plannedDate       DateTime         @map("planned_date")
+  purpose           CallPurpose
+  locationType      CallLocationType @map("location_type")
+  exactLocation     String           @map("exact_location")
+  productLine       ProductLine      @map("product_line")
+  proposedGenerator String?          @map("proposed_generator")
+  isCompleted       Boolean          @default(false) @map("is_completed")
+  completedAt       DateTime?        @map("completed_at")
+  notes             String?
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @default(now()) @updatedAt @map("updated_at")
+
+  company       Company          @relation(fields: [companyId], references: [id])
+  salesRep      User             @relation(fields: [salesRepId], references: [id])
+  customer      Customer         @relation(fields: [customerId], references: [id])
+  contactPerson CustomerContact? @relation(fields: [contactPersonId], references: [id])
+  lead          Lead?            @relation(fields: [leadId, companyId], references: [id, companyId], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([companyId, leadId, plannedDate])
+  @@map("call_planner")
+  @@schema("crm")
+}
+
+model Interaction {
+  id                 Int                 @id @default(autoincrement())
+  companyId          Int                 @map("company_id")
+  customerId         Int                 @map("customer_id")
+  salesRepId         Int                 @map("sales_rep_id")
+  contactId          Int?                @map("contact_id")
+  leadId             Int?                @map("lead_id")
+  quotationId        Int?                @map("quotation_id")
+  type               InteractionType     @default(MEETING)
+  interactionSignals InteractionSignal[] @default([]) @map("interaction_signals")
+  interactionDate    DateTime            @default(now()) @map("interaction_date")
+  notes              String
+  createdAt          DateTime            @default(now()) @map("created_at")
+
+  company   Company          @relation(fields: [companyId], references: [id])
+  salesRep  User             @relation(fields: [salesRepId], references: [id])
+  customer  Customer         @relation(fields: [customerId], references: [id])
+  contact   CustomerContact? @relation(fields: [contactId], references: [id])
+  lead      Lead?            @relation(fields: [leadId], references: [id])
+  quotation Quotation?       @relation(fields: [quotationId], references: [id])
+
+  @@index([customerId, interactionDate])
+  @@index([leadId, interactionDate])
+  @@index([salesRepId, interactionDate])
+  @@map("interactions")
+  @@schema("crm")
+}
+
+model Quotation {
+  id           Int             @id @default(autoincrement())
+  companyId    Int             @map("company_id")
+  quoteNumber  String          @map("quote_number")
+  version      Int             @default(1)
+  customerId   Int             @map("customer_id")
+  salesRepId   Int             @map("sales_rep_id")
+  leadId       Int?            @map("lead_id")
+  totalPrice   Decimal         @map("total_price") @db.Decimal(12, 2)
+  discount     Decimal?        @db.Decimal(5, 2)
+  notes        String?
+  status       QuotationStatus @default(DRAFT)
+  supersededBy Int?            @map("superseded_by")
+  // First corresponding lifecycle timestamp for this quotation version.
+  sentAt       DateTime?       @map("sent_at")
+  rejectedAt   DateTime?       @map("rejected_at")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @default(now()) @updatedAt @map("updated_at")
+
+  company      Company       @relation(fields: [companyId], references: [id])
+  customer     Customer      @relation(fields: [customerId], references: [id])
+  salesRep     User          @relation(fields: [salesRepId], references: [id])
+  lead         Lead?         @relation(fields: [leadId], references: [id])
+  interactions Interaction[]
+
+  @@unique([quoteNumber, version])
+  @@index([leadId, status])
+  @@index([customerId, createdAt])
+  @@map("quotations")
+  @@schema("crm")
+}

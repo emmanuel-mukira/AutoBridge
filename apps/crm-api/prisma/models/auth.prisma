@@ -1,0 +1,86 @@
+enum Status {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  @@schema("auth")
+}
+
+enum CompanyStatus {
+  ACTIVE
+  SUSPENDED
+  TRIAL
+  @@schema("auth")
+}
+
+model Company {
+  id        Int           @id @default(autoincrement())
+  name      String
+  subdomain String?       @unique
+  status    CompanyStatus @default(TRIAL)
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @default(now()) @updatedAt @map("updated_at")
+
+  users        User[]
+  customers    Customer[]
+  callPlans    CallPlan[]
+  leads        Lead[]
+  quotations   Quotation[]
+  interactions Interaction[]
+  auditLogs    AuditLog[]
+  predictions  Prediction[]
+
+  @@schema("auth")
+  @@map("companies")
+}
+
+model User {
+  id                   Int       @id @default(autoincrement())
+  companyId            Int       @map("company_id")
+  username             String    @unique
+  firstName            String    @map("first_name")
+  lastName             String    @map("last_name")
+  email                String    @unique
+  phone                String    @unique
+  passwordHash         String    @map("password_hash")
+  status               Status    @default(PENDING)
+  requirePasswordReset Boolean   @default(false) @map("require_password_reset")
+  lastLogin            DateTime? @map("last_login")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @default(now()) @updatedAt @map("updated_at")
+  inviteToken          String?   @unique @map("invite_token")
+  inviteExpires        DateTime? @map("invite_expires")
+  salesRepCode         String?   @unique @map("sales_rep_code")
+
+  company      Company       @relation(fields: [companyId], references: [id])
+  customers    Customer[]    @relation("SalesRepToCustomer")
+  callPlans    CallPlan[]
+  leads        Lead[]
+  quotations   Quotation[]
+  interactions Interaction[]
+  auditLogs    AuditLog[]
+
+  @@index([companyId, status])
+  @@index([email])
+  @@schema("auth")
+  @@map("users")
+}
+
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  companyId   Int?     @map("company_id")
+  userId      Int?     @map("user_id")
+  action      String
+  description String?
+  ipAddress   String?  @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+  @@index([userId, action])
+  @@index([action, createdAt])
+  @@schema("auth")
+  @@map("audit_logs")
+}
