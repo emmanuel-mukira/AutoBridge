@@ -42,6 +42,7 @@ try {
   assert.equal(admin.user.firstName, process.env.ADMIN_FIRST_NAME);
   assert.equal(admin.user.lastName, process.env.ADMIN_LAST_NAME);
   assert.equal((await request("/api/auth/me", "GET", undefined, admin)).response.status, 200);
+  assert.ok((await request("/api/accounts/owners", "GET", undefined, admin)).data.owners.some((owner) => owner.id === admin.user.id));
   const withoutCsrf = await fetch(`${base}/api/accounts`, { method: "POST", headers: { Cookie: admin.cookie, Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ businessName: "No CSRF" }) });
   assert.equal(withoutCsrf.status, 403);
 
@@ -60,6 +61,7 @@ try {
   assert.equal(repResult.response.status, 201);
   created.users.push(repResult.data.user.id);
   const rep = await signIn(repEmail, repPassword);
+  assert.deepEqual((await request("/api/accounts/owners", "GET", undefined, rep)).data.owners.map((owner) => owner.id), [rep.user.id]);
   assert.equal((await request("/api/auth/users", "POST", { email: `no-${suffix}@example.test`, password: repPassword, firstName: "No", lastName: "Access", role: "ADMIN" }, rep)).response.status, 403);
   assert.equal((await request(`/api/accounts/${account.data.id}`, "GET", undefined, rep)).response.status, 404);
   assert.equal((await request("/api/contacts", "POST", { accountId: account.data.id, firstName: "Denied", lastName: "Rep" }, rep)).response.status, 404);
@@ -69,6 +71,11 @@ try {
   assert.equal((await request(`/api/contacts/${adminContact.data.id}`, "GET", undefined, rep)).response.status, 404);
   assert.equal((await request(`/api/contacts/${adminContact.data.id}`, "PATCH", { title: "Denied" }, rep)).response.status, 404);
   assert.equal((await request(`/api/contacts/${adminContact.data.id}`, "DELETE", undefined, rep)).response.status, 404);
+  assert.equal((await request(`/api/accounts/${account.data.id}`, "PATCH", { ownerId: rep.user.id }, admin)).data.ownerId, rep.user.id);
+  assert.equal((await request(`/api/accounts/${account.data.id}`, "GET", undefined, rep)).response.status, 200);
+  assert.equal((await request(`/api/accounts/${account.data.id}`, "PATCH", { ownerId: admin.user.id }, rep)).response.status, 403);
+  assert.equal((await request(`/api/accounts/${account.data.id}`, "PATCH", { ownerId: admin.user.id }, admin)).data.ownerId, admin.user.id);
+  assert.equal((await request(`/api/accounts/${account.data.id}`, "PATCH", { ownerId: 2147483647 }, admin)).response.status, 400);
   const repAccount = await request("/api/accounts", "POST", { businessName: `Rep ${suffix}`, countyName: "Nairobi", locationAddress: "Other Street" }, rep);
   assert.equal(repAccount.response.status, 201);
   created.accounts.push(repAccount.data.id);

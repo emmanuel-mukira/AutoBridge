@@ -120,7 +120,7 @@ export const KanbanCard = <T extends KanbanItemProps = KanbanItemProps>({
 
   return (
     <>
-      <div style={style} {...(!locked ? listeners : {})} {...attributes} ref={setNodeRef}>
+      <div style={style} {...(!locked ? listeners : {})} {...(!locked ? attributes : {})} ref={setNodeRef}>
         <Card
           className={cn(
             locked ? "cursor-not-allowed" : "cursor-grab",

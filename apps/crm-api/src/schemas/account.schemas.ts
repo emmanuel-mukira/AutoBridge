@@ -13,6 +13,7 @@ export const UpdateAccountSchema = z.object({
   countyName: z.string().min(1).optional(),
   locationAddress: z.string().min(1).optional(),
   shortHistory: z.string().optional(),
+  ownerId: z.number().int().positive().optional(),
 });
 
 export const ListAccountsSchema = z.object({

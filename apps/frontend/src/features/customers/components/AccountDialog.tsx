@@ -10,23 +10,27 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSaveAccount } from "../hooks/useAccounts";
+import { useAccountOwners } from "../hooks/useAccounts";
+import { useAuth } from "@/app/auth/useAuth";
 import type { Account, AccountInput } from "../services/accountsApi";
 
-interface CreateCustomerDialogProps {
+interface AccountDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess?: (customer: Account) => void;
-  customer?: Account;
+  onSuccess?: (account: Account) => void;
+  account?: Account;
 }
 
-export function CreateCustomerDialog({
+export function AccountDialog({
   open,
   onOpenChange,
   onSuccess,
-  customer,
-}: CreateCustomerDialogProps) {
+  account,
+}: AccountDialogProps) {
   const saveAccount = useSaveAccount();
-  const isEditing = !!customer;
+  const { user } = useAuth();
+  const { data: owners } = useAccountOwners();
+  const isEditing = !!account;
 
   const {
     register,
@@ -39,23 +43,25 @@ export function CreateCustomerDialog({
   });
 
   useEffect(() => {
-    if (customer) {
-      setValue("businessName", customer.businessName);
-      setValue("countyName", customer.countyName);
-      setValue("locationAddress", customer.locationAddress);
-      setValue("shortHistory", customer.shortHistory || "");
+    if (account) {
+      setValue("businessName", account.businessName);
+      setValue("countyName", account.countyName);
+      setValue("locationAddress", account.locationAddress);
+      setValue("shortHistory", account.shortHistory || "");
+      setValue("ownerId", account.ownerId);
+    } else if (user) {
+      setValue("ownerId", user.id);
     }
-  }, [customer, setValue]);
+  }, [account, setValue, user]);
 
   const onSubmit = async (data: AccountInput) => {
     try {
-      const saved = await saveAccount.mutateAsync({ id: customer?.id, input: data });
+      const saved = await saveAccount.mutateAsync({ id: account?.id, input: data });
       reset();
       onOpenChange(false);
       onSuccess?.(saved);
     } catch (error) {
-      // Error is handled by TanStack Query and toast notification
-      console.error('Failed to save customer:', error);
+      console.error("Failed to save account:", error);
     }
   };
 
@@ -68,21 +74,21 @@ export function CreateCustomerDialog({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit Customer" : "Create New Customer"}</DialogTitle>
+          <DialogTitle>{isEditing ? "Edit account" : "Create account"}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="businessName">Business Name *</Label>
+            <Label htmlFor="businessName">Business name *</Label>
             <Input
               id="businessName"
               {...register("businessName", {
-                required: "Company name is required",
+                required: "Business name is required",
                 minLength: {
                   value: 2,
-                  message: "Company name must be at least 2 characters",
+                  message: "Business name must be at least 2 characters",
                 },
-                validate: (value) => value.trim().length > 0 || "Company name cannot be empty",
+                validate: (value) => value.trim().length > 0 || "Business name cannot be empty",
               })}
             />
             {errors.businessName && (
@@ -91,6 +97,14 @@ export function CreateCustomerDialog({
               </p>
             )}
           </div>
+
+          {user?.role === "ADMIN" && <div className="space-y-2">
+            <Label htmlFor="ownerId">Account owner *</Label>
+            <select id="ownerId" className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm" {...register("ownerId", { valueAsNumber: true, required: "Owner is required" })}>
+              {owners?.map((owner) => <option key={owner.id} value={owner.id}>{owner.firstName} {owner.lastName} ({owner.role === "ADMIN" ? "Administrator" : "Sales representative"})</option>)}
+            </select>
+            {errors.ownerId && <p className="text-sm text-destructive">{errors.ownerId.message}</p>}
+          </div>}
 
           <div className="space-y-2">
             <Label htmlFor="countyName">County *</Label>
@@ -113,7 +127,7 @@ export function CreateCustomerDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="locationAddress">Location Address *</Label>
+            <Label htmlFor="locationAddress">Location address *</Label>
             <Input
               id="locationAddress"
               {...register("locationAddress", {
@@ -133,12 +147,14 @@ export function CreateCustomerDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="shortHistory">Short History (Optional)</Label>
+            <Label htmlFor="shortHistory">Short history (optional)</Label>
             <Input
               id="shortHistory"
               {...register("shortHistory")}
             />
           </div>
+
+          {saveAccount.error && <p role="alert" className="text-sm text-destructive">{saveAccount.error.message}</p>}
 
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={handleClose}>
@@ -154,10 +170,10 @@ export function CreateCustomerDialog({
               {isEditing
                 ? saveAccount.isPending
                   ? "Updating..."
-                  : "Update Customer"
+                  : "Update account"
                 : saveAccount.isPending
                 ? "Creating..."
-                : "Create Customer"}
+                : "Create account"}
             </Button>
           </div>
         </form>

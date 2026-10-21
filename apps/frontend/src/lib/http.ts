@@ -191,8 +191,6 @@ async function request<T>(
     friendly = "Session expired. Please log in again.";
   } else if (res.status === 403) {
     friendly = "Forbidden. You do not have permission to perform this action.";
-  } else if (res.status === 409) {
-    friendly = "Email already in use.";
   } else if (res.status >= 500) {
     friendly = "Server error. Please try again later.";
   } else if (!serverMsg) {

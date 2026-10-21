@@ -77,24 +77,24 @@ export function errorHandler(
 function getOperationContext(url: string, method: string): { message: string } {
   const urlLower = url.toLowerCase();
 
-  if (urlLower.includes("/customers")) {
+  if (urlLower.includes("/accounts")) {
     if (method === "POST")
-      return { message: "Failed to create customer. Please try again." };
+      return { message: "Failed to create account. Please try again." };
     if (method === "PUT" || method === "PATCH")
-      return { message: "Failed to update customer. Please try again." };
+      return { message: "Failed to update account. Please try again." };
     if (method === "DELETE")
-      return { message: "Failed to delete customer. Please try again." };
-    return { message: "Failed to retrieve customer data. Please try again." };
+      return { message: "Failed to delete account. Please try again." };
+    return { message: "Failed to retrieve account data. Please try again." };
   }
 
-  if (urlLower.includes("/leads")) {
+  if (urlLower.includes("/opportunities")) {
     if (method === "POST")
-      return { message: "Failed to create lead. Please try again." };
+      return { message: "Failed to create opportunity. Please try again." };
     if (method === "PUT" || method === "PATCH")
-      return { message: "Failed to update lead. Please try again." };
+      return { message: "Failed to update opportunity. Please try again." };
     if (method === "DELETE")
-      return { message: "Failed to delete lead. Please try again." };
-    return { message: "Failed to retrieve lead data. Please try again." };
+      return { message: "Failed to delete opportunity. Please try again." };
+    return { message: "Failed to retrieve opportunity data. Please try again." };
   }
 
   if (urlLower.includes("/quotations")) {

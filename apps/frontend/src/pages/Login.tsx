@@ -11,11 +11,11 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  useEffect(() => { if (isAuthenticated) navigate("/dashboard/customers", { replace: true }); }, [isAuthenticated, navigate]);
+  useEffect(() => { if (isAuthenticated) navigate("/dashboard/accounts", { replace: true }); }, [isAuthenticated, navigate]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (await login(email, password)) navigate("/dashboard/customers", { replace: true });
+    if (await login(email, password)) navigate("/dashboard/accounts", { replace: true });
   }
 
   return (

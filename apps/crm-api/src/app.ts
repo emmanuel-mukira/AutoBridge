@@ -6,6 +6,7 @@ import cookieParser from "cookie-parser";
 import authRouter from "./routes/auth.routes.js";
 import accountRouter from "./routes/account.routes.js";
 import contactRouter from "./routes/contact.routes.js";
+import opportunityRouter from "./routes/opportunity.routes.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -74,8 +75,7 @@ app.get("/health", (_req, res) => {
 app.use("/api/auth", authRouter);
 app.use("/api/accounts", accountRouter);
 app.use("/api/contacts", contactRouter);
-app.use("/api/customers", accountRouter);
-app.use("/api/customer-contacts", contactRouter);
+app.use("/api/opportunities", opportunityRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

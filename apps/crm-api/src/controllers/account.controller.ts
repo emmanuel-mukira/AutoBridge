@@ -37,11 +37,20 @@ export async function update(req: Request, res: Response, next: NextFunction) {
   const id = AccountIdSchema.safeParse(req.params);
   const data = UpdateAccountSchema.safeParse(req.body);
   if (!id.success || !data.success) return void res.status(400).json({ error: "Invalid update data" });
+  if (req.user!.role !== "ADMIN" && data.data.ownerId !== undefined) return void res.status(403).json({ error: "Cannot assign another owner" });
   try {
     const account = await service.update(req.user!, id.data.id, data.data);
     if (!account) return void res.status(404).json({ error: "Account not found" });
     res.json(account);
-  } catch (error) { next(error); }
+  } catch (error) {
+    if (error instanceof Error && error.message === "OWNER_NOT_FOUND") return void res.status(400).json({ error: "Owner not found" });
+    if (error instanceof Error && error.message === "ACCOUNT_HAS_OPPORTUNITIES") return void res.status(409).json({ error: "Reassign the account only after its opportunities have been transferred" });
+    next(error);
+  }
+}
+
+export async function owners(req: Request, res: Response, next: NextFunction) {
+  try { res.json({ owners: await service.listOwners(req.user!) }); } catch (error) { next(error); }
 }
 
 export async function deleteAccount(req: Request, res: Response, next: NextFunction) {

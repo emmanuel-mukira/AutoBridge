@@ -11,29 +11,26 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  useCreateCustomerContact,
-  useUpdateCustomerContact,
-} from "../hooks/useCustomerContacts";
-import type { CreateCustomerContactInput, CustomerContact } from "@/types/customerContact";
+import { useCreateContact, useUpdateContact } from "../hooks/useContacts";
+import type { Contact, ContactInput } from "@/types/contact";
 
-interface CreateContactDialogProps {
+interface ContactDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  customerId: number;
-  customerName: string;
-  contact?: CustomerContact | null;
+  accountId: number;
+  accountName: string;
+  contact?: Contact | null;
 }
 
-export function CreateContactDialog({
+export function ContactDialog({
   open,
   onOpenChange,
-  customerId,
-  customerName,
+  accountId,
+  accountName,
   contact,
-}: CreateContactDialogProps) {
-  const createContactMutation = useCreateCustomerContact();
-  const updateContactMutation = useUpdateCustomerContact();
+}: ContactDialogProps) {
+  const createContactMutation = useCreateContact();
+  const updateContactMutation = useUpdateContact(accountId);
 
   const {
     register,
@@ -42,9 +39,9 @@ export function CreateContactDialog({
     setValue,
     watch,
     formState: { errors },
-  } = useForm<CreateCustomerContactInput>({
+  } = useForm<ContactInput>({
     defaultValues: {
-      accountId: customerId,
+      accountId,
       isPrimary: false,
     },
   });
@@ -62,19 +59,19 @@ export function CreateContactDialog({
         setValue("isPrimary", contact.isPrimary);
       } else {
         reset({
-          accountId: customerId,
+          accountId,
           isPrimary: false,
         });
       }
     }
-  }, [open, contact, customerId, reset, setValue]);
+  }, [open, contact, accountId, reset, setValue]);
 
-  const onSubmit = async (data: CreateCustomerContactInput) => {
+  const onSubmit = async (data: ContactInput) => {
     try {
       if (contact) {
         await updateContactMutation.mutateAsync({
           id: contact.id,
-          data: {
+          input: {
             firstName: data.firstName,
             lastName: data.lastName,
             title: data.title,
@@ -103,7 +100,7 @@ export function CreateContactDialog({
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>{contact ? "Edit Contact" : "Add Contact"}</DialogTitle>
           <DialogDescription>
-            {contact ? "Update contact information" : `Add a new contact for ${customerName}`}
+            {contact ? "Update contact information" : `Add a new contact for ${accountName}`}
           </DialogDescription>
         </DialogHeader>
 
@@ -179,6 +176,12 @@ export function CreateContactDialog({
               </Label>
             </div>
           </div>
+
+          {(createContactMutation.error || updateContactMutation.error) && (
+            <p role="alert" className="text-sm text-destructive">
+              {(createContactMutation.error || updateContactMutation.error)?.message}
+            </p>
+          )}
 
           <div className="flex justify-end gap-2 pt-4 border-t flex-shrink-0">
             <Button type="button" variant="outline" onClick={handleClose}>

@@ -24,7 +24,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -33,53 +32,65 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Plus, MoreVertical, Pencil, Trash2, Mail, Phone } from "lucide-react";
-import { useCustomerContacts, useDeleteCustomerContact } from "../hooks/useCustomerContacts";
-import { CreateContactDialog } from "./CreateContactDialog";
-import type { Customer } from "../types";
-import type { CustomerContact } from "@/types/customerContact";
+import { useContacts, useDeleteContact } from "../hooks/useContacts";
+import { ContactDialog } from "./ContactDialog";
+import type { Account } from "../services/accountsApi";
+import type { Contact } from "@/types/contact";
 
-interface CustomerContactsDialogProps {
+interface AccountContactsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  customer: Customer | null;
+  account: Account | null;
 }
 
-export function CustomerContactsDialog({
+export function AccountContactsDialog({
   open,
   onOpenChange,
-  customer,
-}: CustomerContactsDialogProps) {
+  account,
+}: AccountContactsDialogProps) {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [editingContact, setEditingContact] = useState<CustomerContact | null>(null);
-  const [deletingContact, setDeletingContact] = useState<CustomerContact | null>(null);
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [deletingContact, setDeletingContact] = useState<Contact | null>(null);
 
-  const { data: contactsData, isLoading } = useCustomerContacts({
-    accountId: customer?.id,
-  });
-  const deleteContactMutation = useDeleteCustomerContact();
+  const { data: contactsData, isLoading, error } = useContacts(account?.id);
+  const deleteContactMutation = useDeleteContact(account?.id ?? 0);
 
   const handleDelete = async () => {
     if (!deletingContact) return;
-    await deleteContactMutation.mutateAsync(deletingContact.id);
-    setDeletingContact(null);
+    try {
+      await deleteContactMutation.mutateAsync(deletingContact.id);
+      setDeletingContact(null);
+    } catch {
+      // The mutation error remains visible in the parent dialog.
+    }
   };
 
-  const handleEdit = (contact: CustomerContact) => {
+  const handleEdit = (contact: Contact) => {
     setEditingContact(contact);
   };
 
-  if (!customer) return null;
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      setIsCreateDialogOpen(false);
+      setEditingContact(null);
+      setDeletingContact(null);
+      deleteContactMutation.reset();
+    }
+    onOpenChange(nextOpen);
+  };
+
+  if (!account) return null;
 
   const contacts = contactsData?.contacts || [];
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="sm:max-w-[800px] max-h-[90vh] flex flex-col">
           <DialogHeader className="flex-shrink-0">
-            <DialogTitle>Customer Contacts</DialogTitle>
+            <DialogTitle>Account contacts</DialogTitle>
             <DialogDescription>
-              Manage contacts for {customer.companyName}
+              Manage contacts for {account.businessName}
             </DialogDescription>
           </DialogHeader>
 
@@ -91,7 +102,9 @@ export function CustomerContactsDialog({
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto">
-            {isLoading ? (
+            {error ? (
+              <div role="alert" className="text-center py-8 text-destructive">Unable to load contacts.</div>
+            ) : isLoading ? (
               <div className="text-center py-8 text-muted-foreground">
                 Loading contacts...
               </div>
@@ -145,15 +158,19 @@ export function CustomerContactsDialog({
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon" className="h-8 w-8">
                                 <MoreVertical className="h-4 w-4" />
+                                <span className="sr-only">Contact actions</span>
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleEdit(contact)}>
+                            <DropdownMenuItem onSelect={() => handleEdit(contact)}>
                                 <Pencil className="h-4 w-4 mr-2" />
                                 Edit
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => setDeletingContact(contact)}
+                                onSelect={() => {
+                                  deleteContactMutation.reset();
+                                  setDeletingContact(contact);
+                                }}
                                 className="text-destructive"
                               >
                                 <Trash2 className="h-4 w-4 mr-2" />
@@ -171,14 +188,15 @@ export function CustomerContactsDialog({
           </div>
 
           <div className="flex justify-end pt-4 border-t flex-shrink-0">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {deleteContactMutation.error && <p role="alert" className="mr-auto text-sm text-destructive">{deleteContactMutation.error.message}</p>}
+            <Button variant="outline" onClick={() => handleOpenChange(false)}>
               Close
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      <CreateContactDialog
+      <ContactDialog
         open={isCreateDialogOpen || !!editingContact}
         onOpenChange={(open) => {
           if (!open) {
@@ -186,14 +204,14 @@ export function CustomerContactsDialog({
             setEditingContact(null);
           }
         }}
-        customerId={customer.id}
-        customerName={customer.companyName}
+        accountId={account.id}
+        accountName={account.businessName}
         contact={editingContact}
       />
 
       <AlertDialog
         open={!!deletingContact}
-        onOpenChange={(open) => !open && setDeletingContact(null)}
+        onOpenChange={(nextOpen) => !nextOpen && !deleteContactMutation.isPending && setDeletingContact(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -202,15 +220,13 @@ export function CustomerContactsDialog({
               Are you sure you want to delete {deletingContact?.firstName}{" "}
               {deletingContact?.lastName}? This action cannot be undone.
             </AlertDialogDescription>
+            {deleteContactMutation.error && <p role="alert" className="text-sm text-destructive">{deleteContactMutation.error.message}</p>}
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
+            <AlertDialogCancel disabled={deleteContactMutation.isPending}>Cancel</AlertDialogCancel>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleteContactMutation.isPending}>
+              {deleteContactMutation.isPending ? "Deleting..." : "Delete"}
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

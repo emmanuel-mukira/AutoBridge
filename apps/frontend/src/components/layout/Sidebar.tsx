@@ -3,7 +3,8 @@ import { NavLink, Link } from "react-router-dom";
 import { 
   ChevronsLeft, 
   ChevronsRight,
-  Building2
+  Building2,
+  BriefcaseBusiness
 } from "lucide-react";
 import { useAuth } from "@/app/auth/useAuth";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,8 @@ type SidebarLinksProps = {
 
 export const SidebarLinks = memo(function SidebarLinks({ collapsed = false }: SidebarLinksProps) {
   const regularLinks = [
-    { to: "/dashboard/customers", label: "Customers", icon: Building2 },
+    { to: "/dashboard/accounts", label: "Accounts", icon: Building2 },
+    { to: "/dashboard/opportunities", label: "Opportunities", icon: BriefcaseBusiness },
   ];
 
   return (
@@ -30,9 +32,9 @@ export const SidebarLinks = memo(function SidebarLinks({ collapsed = false }: Si
               className={({ isActive }) =>
                 cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all hover:text-primary",
-                  isActive 
-                    ? "bg-primary/10 text-primary shadow-sm" 
-                    : "text-muted-foreground hover:bg-muted/50",
+                  isActive
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
+                    : "text-slate-300 hover:bg-sidebar-accent hover:text-white",
                   collapsed && "justify-center px-2"
                 )
               }
@@ -59,12 +61,12 @@ export function Sidebar() {
     <aside
       data-collapsed={collapsed}
       className={cn(
-        "group hidden sm:flex flex-col border-r bg-card fixed left-0 top-0 bottom-0 h-screen z-50",
+        "group hidden sm:flex flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground fixed left-0 top-0 bottom-0 h-screen z-50",
         "will-change-transform transition-transform duration-200 ease-out",
         collapsed ? "w-[60px]" : "w-64"
       )}
     >
-      <div className={cn("flex h-16 items-center px-3 shrink-0 border-b bg-card relative z-10", collapsed ? "justify-center" : "justify-between")}>
+      <div className={cn("flex h-16 items-center px-3 shrink-0 border-b border-sidebar-border relative z-10", collapsed ? "justify-center" : "justify-between")}>
          {!collapsed && (
            <Link to="/" className="flex items-center">
              <span className="ml-2 text-lg font-semibold">AutoBridge CRM</span>
@@ -74,7 +76,7 @@ export function Sidebar() {
             variant="ghost"
             size="icon"
             className={cn(
-              "h-9 w-9 text-foreground hover:text-primary hover:bg-primary/10 shrink-0 relative z-20 border border-border/40",
+              "h-9 w-9 text-slate-200 hover:text-white hover:bg-sidebar-accent shrink-0 relative z-20 border border-sidebar-border",
               collapsed ? "" : "ml-auto"
             )}
             onClick={toggleSidebar}
@@ -88,11 +90,11 @@ export function Sidebar() {
         <SidebarLinks collapsed={collapsed} />
       </div>
       
-      <div className="shrink-0 p-3 border-t bg-muted/5">
+      <div className="shrink-0 p-3 border-t border-sidebar-border">
         {!collapsed ? (
           <div className="px-1">
             <p className="text-sm font-semibold truncate">{user?.firstName || ''} {user?.lastName || ''}</p>
-            <p className="text-xs text-muted-foreground truncate">{user?.email || ''}</p>
+            <p className="text-xs text-slate-400 truncate">{user?.email || ''}</p>
           </div>
         ) : (
           <div className="flex justify-center">
