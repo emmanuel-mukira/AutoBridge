@@ -12,6 +12,7 @@ type Entry = {
 };
 
 const buckets = new Map<string, Entry>();
+// shortcut: limits are per process; use a shared store if the API runs on multiple instances.
 
 export function rateLimit(options: Options) {
   const windowMs = options.windowMs;

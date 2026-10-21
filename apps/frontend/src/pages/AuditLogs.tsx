@@ -55,7 +55,7 @@ export default function AuditLogs() {
     return labelMap[field] || field;
   };
 
-  const isAdmin = user?.roleId === 1;
+  const isAdmin = user?.role === "ADMIN";
 
   if (!isAdmin) {
     return (

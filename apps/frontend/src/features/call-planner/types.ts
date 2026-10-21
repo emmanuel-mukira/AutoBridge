@@ -4,7 +4,6 @@ export type ProductLine = "Parts" | "Electrical" | "Hardware" | "Generator" | "S
 
 export interface CallPlan {
   id: number;
-  companyId: number;
   salesRepId: number;
   customerId: number;
   contactPersonId: number | null;

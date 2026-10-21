@@ -1,80 +1,16 @@
+import { randomBytes, randomUUID } from "node:crypto";
+import bcrypt from "bcryptjs";
 import { prisma } from "../client.js";
-import logger from "../lib/logger.js";
+import { csrfToken, hashToken, sessionExpiry } from "../middleware/auth.js";
 
-export interface SignupInput {
-  companyId: number;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  ipAddress?: string;
-  userAgent?: string;
+export async function login(email: string, password: string) {
+  const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+  if (!user || !user.active || !(await bcrypt.compare(password, user.passwordHash))) return null;
+  const token = randomBytes(32).toString("hex");
+  await prisma.session.create({ data: { id: randomUUID(), userId: user.id, tokenHash: hashToken(token), csrfHash: hashToken(csrfToken(token)), expiresAt: sessionExpiry() } });
+  return { token, user: publicUser(user) };
 }
 
-export interface SignupResult {
-  id: number;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  status: string;
-}
-
-export class AuthService {
-  async signup(input: SignupInput): Promise<SignupResult> {
-    const {
-      companyId,
-      firstName,
-      lastName,
-      email,
-      phone,
-      ipAddress,
-      userAgent,
-    } = input;
-
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) {
-      throw new Error("EMAIL_IN_USE");
-    }
-
-    const user = await prisma.user.create({
-      data: {
-        companyId,
-        firstName,
-        lastName,
-        email,
-        phone,
-        passwordHash: "",
-        username: email
-          .split("@")[0]
-          .toLowerCase()
-          .replace(/[^a-z0-9.]/g, "."),
-        status: "PENDING",
-        requirePasswordReset: true,
-      },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        phone: true,
-        status: true,
-      },
-    });
-
-    await prisma.auditLog
-      .create({
-        data: {
-          companyId,
-          userId: user.id,
-          action: "SIGNUP_REQUESTED",
-          description: "Backend user provisioning",
-          ipAddress,
-          userAgent,
-        },
-      })
-      .catch(() => {});
-
-    return user;
-  }
+export function publicUser(user: { id: number; email: string; firstName: string; lastName: string; role: "ADMIN" | "SALES_REP" }) {
+  return { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role, groups: [user.role === "ADMIN" ? "admin" : "sales_rep"] };
 }

@@ -71,7 +71,7 @@ export function InlineCustomerCreate({
       // If contact data is provided, create contact
       if ((requireContact || isCreatingContact) && data.contactFirstName && data.contactLastName) {
         const contactData: CreateCustomerContactInput = {
-          customerId: createdCustomer.id,
+          accountId: createdCustomer.id,
           firstName: data.contactFirstName,
           lastName: data.contactLastName,
           email: data.contactEmail || undefined,

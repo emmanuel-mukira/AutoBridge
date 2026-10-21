@@ -50,7 +50,7 @@ export async function sendInviteEmail(to: string, name: string, token: string) {
   const html = `
     <div>
       <p>Hi ${name || "there"},</p>
-      <p>You have been invited to Gaston CRM. Click the button below to set your password and activate your account.</p>
+      <p>You have been invited to AutoBridge. Click the button below to set your password and activate your account.</p>
       <p>
         <a href="${acceptUrl}" style="display:inline-block;padding:10px 16px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">Accept Invite</a>
       </p>
@@ -60,12 +60,12 @@ export async function sendInviteEmail(to: string, name: string, token: string) {
     </div>
   `;
 
-  const text = `Hi ${name || "there"},\n\nYou have been invited to Gaston CRM. Open this link to set your password and activate your account:\n${acceptUrl}\n\nIf you did not expect this email, you can ignore it.`;
+  const text = `Hi ${name || "there"},\n\nYou have been invited to AutoBridge. Open this link to set your password and activate your account:\n${acceptUrl}\n\nIf you did not expect this email, you can ignore it.`;
 
   const mail = {
     from: SMTP_FROM,
     to,
-    subject: "Your Gaston CRM invite",
+    subject: "Your AutoBridge invite",
     text,
     html,
   };

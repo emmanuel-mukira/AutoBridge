@@ -37,7 +37,7 @@ const INTERACTION_TYPES: InteractionType[] = ["CALL", "EMAIL", "MEETING", "SITE_
 
 export function InteractionFilters({ open, onOpenChange, filterKey }: InteractionFiltersProps) {
   const { user } = useAuth();
-  const isAdmin = user?.roleId === 1;
+  const isAdmin = user?.role === "ADMIN";
   
   const [users, setUsers] = useState<User[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);

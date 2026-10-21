@@ -8,9 +8,7 @@ const { Pool } = pg;
  * Separate from the main CRM Prisma client — lightweight, raw SQL only.
  */
 const analyticsPool = new Pool({
-  connectionString:
-    process.env.ANALYTICS_DATABASE_URL ||
-    "postgresql://tazamatech_analytics_app:password@localhost:5433/tazamatech_analytics",
+  connectionString: process.env.ANALYTICS_DATABASE_URL,
   max: 10,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 5_000,

@@ -2,7 +2,6 @@ export type InteractionType = "CALL" | "EMAIL" | "MEETING" | "SITE_VISIT" | "FOL
 
 export interface Interaction {
   id: number;
-  companyId: number;
   customerId: number;
   salesRepId: number;
   contactId: number | null;

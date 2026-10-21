@@ -2,7 +2,6 @@ export type LeadStatus = "DRAFT" | "OPEN" | "WON" | "LOST";
 
 export interface Lead {
   id: number;
-  companyId: number;
   customerId: number;
   salesRepId: number;
   generatorRecommended: string | null;

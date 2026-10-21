@@ -44,7 +44,7 @@ export function CreateContactDialog({
     formState: { errors },
   } = useForm<CreateCustomerContactInput>({
     defaultValues: {
-      customerId,
+      accountId: customerId,
       isPrimary: false,
     },
   });
@@ -62,7 +62,7 @@ export function CreateContactDialog({
         setValue("isPrimary", contact.isPrimary);
       } else {
         reset({
-          customerId,
+          accountId: customerId,
           isPrimary: false,
         });
       }

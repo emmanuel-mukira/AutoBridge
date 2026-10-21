@@ -1,11 +1,35 @@
-# Sales Opportunity Win/Loss — Dataset-First Study
+# AutoBridge CRM
 
-The executed [IBM Watson notebook](IBM_Watson_dataset.ipynb) audits the repository's
+AutoBridge CRM is an in-development B2B automotive customer and opportunity
+management application. The repository contains a React frontend, an Express
+API, local PostgreSQL configuration, and IBM-trained opportunity-scoring
+research. The current application supports development login and customer
+workflows; broader CRM and prediction integration are still in progress.
+
+The [supervisor results report](docs/supervisor-model-results.md) summarizes
+the two finalized Random Forest experiments and real sample predictions.
+The saved automotive model is in [models/automotive_v1](models/automotive_v1).
+
+## Application development
+
+Start PostgreSQL from the repository root with `docker compose up -d postgres`.
+Then run `npm run dev` independently in `apps/crm-api` and `apps/frontend`.
+Keep local database and administrator credentials in the ignored `.env` files;
+the sanitized examples show the required variable names. From
+`apps/crm-api`, `npm run seed:dev` runs the
+[central automotive seed](apps/crm-api/prisma/automotive/seed.ts) to prepare the
+local development administrator and three sample customers without resetting
+the database.
+
+## Earlier dataset audit
+
+The executed [IBM Watson notebook](notebooks/IBM_Watson_dataset.ipynb) audits the repository's
 [sales CSV](datasets/IBM-sales-opportunity.csv), compares leakage-aware baselines,
-and evaluates whether historical WON probabilities are useful. No application
-redesign or production deployment is included.
+and evaluates whether historical WON probabilities are useful. This earlier audit
+preceded the finalized [Lean 3](notebooks/07_ibm_final_model.ipynb) and
+[Automotive 5](notebooks/08_automotive_domain_analysis.ipynb) experiments.
 
-## Run locally
+## Run the earlier notebook locally
 
 Open the repository in VS Code/Jupyter, select a Python environment containing
 NumPy, pandas, matplotlib, scikit-learn and ipykernel, then run the notebook from

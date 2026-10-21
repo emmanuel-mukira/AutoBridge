@@ -9,15 +9,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useCreateCustomer, useUpdateCustomer } from "../hooks/useCustomers";
-import { CUSTOMER_CATEGORIES } from "../utils/categoryUtils";
-import type { CreateCustomerInput, Customer } from "../types/index";
+import { useSaveAccount } from "../hooks/useAccounts";
+import type { Account, AccountInput } from "../services/accountsApi";
 
 interface CreateCustomerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess?: (customer: Customer) => void;
-  customer?: Customer;
+  onSuccess?: (customer: Account) => void;
+  customer?: Account;
 }
 
 export function CreateCustomerDialog({
@@ -26,8 +25,7 @@ export function CreateCustomerDialog({
   onSuccess,
   customer,
 }: CreateCustomerDialogProps) {
-  const createCustomerMutation = useCreateCustomer();
-  const updateCustomerMutation = useUpdateCustomer();
+  const saveAccount = useSaveAccount();
   const isEditing = !!customer;
 
   const {
@@ -36,36 +34,25 @@ export function CreateCustomerDialog({
     reset,
     setValue,
     formState: { errors },
-  } = useForm<CreateCustomerInput>({
+  } = useForm<AccountInput>({
     mode: "onBlur",
   });
 
   useEffect(() => {
     if (customer) {
-      setValue("companyName", customer.companyName);
+      setValue("businessName", customer.businessName);
       setValue("countyName", customer.countyName);
       setValue("locationAddress", customer.locationAddress);
       setValue("shortHistory", customer.shortHistory || "");
-      setValue("category", customer.category);
     }
   }, [customer, setValue]);
 
-  const onSubmit = async (data: CreateCustomerInput) => {
+  const onSubmit = async (data: AccountInput) => {
     try {
-      if (isEditing && customer) {
-        const updated = await updateCustomerMutation.mutateAsync({
-          id: customer.id,
-          data,
-        });
-        reset();
-        onOpenChange(false);
-        onSuccess?.(updated);
-      } else {
-        const created = await createCustomerMutation.mutateAsync(data);
-        reset();
-        onOpenChange(false);
-        onSuccess?.(created);
-      }
+      const saved = await saveAccount.mutateAsync({ id: customer?.id, input: data });
+      reset();
+      onOpenChange(false);
+      onSuccess?.(saved);
     } catch (error) {
       // Error is handled by TanStack Query and toast notification
       console.error('Failed to save customer:', error);
@@ -86,10 +73,10 @@ export function CreateCustomerDialog({
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="companyName">Company Name *</Label>
+            <Label htmlFor="businessName">Business Name *</Label>
             <Input
-              id="companyName"
-              {...register("companyName", {
+              id="businessName"
+              {...register("businessName", {
                 required: "Company name is required",
                 minLength: {
                   value: 2,
@@ -98,9 +85,9 @@ export function CreateCustomerDialog({
                 validate: (value) => value.trim().length > 0 || "Company name cannot be empty",
               })}
             />
-            {errors.companyName && (
+            {errors.businessName && (
               <p className="text-sm text-destructive">
-                {errors.companyName.message}
+                {errors.businessName.message}
               </p>
             )}
           </div>
@@ -153,22 +140,6 @@ export function CreateCustomerDialog({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="category">Category (Optional)</Label>
-            <select
-              id="category"
-              {...register("category")}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              <option value="">Select a category...</option>
-              {CUSTOMER_CATEGORIES.map((cat) => (
-                <option key={cat.value} value={cat.value}>
-                  {cat.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
@@ -176,16 +147,15 @@ export function CreateCustomerDialog({
             <Button 
               type="submit" 
               disabled={
-                createCustomerMutation.isPending || 
-                updateCustomerMutation.isPending ||
+                saveAccount.isPending ||
                 Object.keys(errors).length > 0
               }
             >
               {isEditing
-                ? updateCustomerMutation.isPending
+                ? saveAccount.isPending
                   ? "Updating..."
                   : "Update Customer"
-                : createCustomerMutation.isPending
+                : saveAccount.isPending
                 ? "Creating..."
                 : "Create Customer"}
             </Button>

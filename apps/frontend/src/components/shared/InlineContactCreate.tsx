@@ -35,7 +35,7 @@ export function InlineContactCreate({ customerId, onSuccess, onCancel }: InlineC
     setIsSubmitting(true);
     try {
       const contact = await createMutation.mutateAsync({
-        customerId,
+        accountId: customerId,
         ...data,
       });
       onSuccess(contact);

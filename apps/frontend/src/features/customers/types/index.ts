@@ -20,7 +20,6 @@ export interface Customer {
   shortHistory?: string;
   category?: CustomerCategory;
   salesRepId: number;
-  companyId: number;
   createdAt: string;
   updatedAt: string;
   salesRep?: {

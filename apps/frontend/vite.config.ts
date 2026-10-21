@@ -77,7 +77,6 @@ export default defineConfig({
       "react-dom",
       "react-router-dom",
       "@tanstack/react-query",
-      "axios",
       "zustand",
       "react-is",
       "zustand/traditional",

@@ -19,7 +19,7 @@ export function useCustomerContacts(params?: ListCustomerContactsParams) {
   return useQuery({
     queryKey: contactKeys.list(params || {}),
     queryFn: () => customerContactsApi.list(params),
-    enabled: !!params?.customerId,
+    enabled: !!params?.accountId,
   });
 }
 

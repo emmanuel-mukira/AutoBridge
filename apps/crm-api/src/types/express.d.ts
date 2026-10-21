@@ -5,11 +5,13 @@ declare global {
     interface Request {
       user?: {
         id: number;
-        username: string;
         email: string;
-        name: string;
-        groups: string[];
-        companyId: number;
+        firstName: string;
+        lastName: string;
+        role: "ADMIN" | "SALES_REP";
+        sessionId: string;
+        sessionToken: string;
+        csrfHash: string;
       };
     }
   }

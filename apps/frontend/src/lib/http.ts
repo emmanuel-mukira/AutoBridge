@@ -10,6 +10,9 @@ interface RequestConfig {
   withCredentials?: boolean;
 }
 
+let csrfToken: string | null = null;
+export function setCsrfToken(value: string | null): void { csrfToken = value; }
+
 interface HttpResponse<T> {
   data: T;
   status: number;
@@ -56,10 +59,6 @@ function assertAllowedAbsoluteUrl(url: string): void {
   const apiOrigin = getEnvOrigin(API_URL);
   if (apiOrigin) {
     allowedOrigins.add(apiOrigin);
-  }
-  const autheliaOrigin = getEnvOrigin(import.meta.env.VITE_AUTHELIA_URL as string | undefined);
-  if (autheliaOrigin) {
-    allowedOrigins.add(autheliaOrigin);
   }
   if (!allowedOrigins.has(targetOrigin)) {
     throw new HttpError("Blocked outbound request to untrusted origin.", 0, {}, url);
@@ -135,6 +134,7 @@ async function request<T>(
   // Security boundary: only allow absolute calls to known trusted origins.
   assertAllowedAbsoluteUrl(fullUrl);
   const headers: Record<string, string> = { ...config?.headers };
+  if (csrfToken && !["GET", "HEAD", "OPTIONS"].includes(method) && !isAbsolute) headers["X-CSRF-Token"] = csrfToken;
   let fetchBody: BodyInit | undefined;
   if (body instanceof URLSearchParams) {
     fetchBody = body;
@@ -147,7 +147,7 @@ async function request<T>(
       headers["Content-Type"] = "application/json";
     }
   }
-  // Default to cookie-based sessions (`include`) for Authelia/API auth.
+  // Send the Express session cookie on API requests.
   // Allow explicit opt-out (`omit`) for endpoints that must not send cookies.
   // Security control: reduce attack surface by only sending credentials when necessary.
   const credentials: RequestCredentials = config?.withCredentials === false ? "omit" : "include";
@@ -187,7 +187,7 @@ async function request<T>(
   const serverData = (errorData ?? {}) as { error?: string; message?: string };
   const serverMsg = serverData.error || serverData.message;
   let friendly = serverMsg || res.statusText;
-  if (res.status === 401) {
+  if (res.status === 401 && url !== "/api/auth/login") {
     friendly = "Session expired. Please log in again.";
   } else if (res.status === 403) {
     friendly = "Forbidden. You do not have permission to perform this action.";

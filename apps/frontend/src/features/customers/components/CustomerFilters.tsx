@@ -49,7 +49,7 @@ export function CustomerFilters({
   onFiltersChange,
 }: CustomerFiltersProps) {
   const { user } = useAuth();
-  const isAdmin = user?.roleId === 1;
+  const isAdmin = user?.role === "ADMIN";
   const [users, setUsers] = useState<User[]>([]);
   const [localFilters, setLocalFilters] = useState(filters);
 

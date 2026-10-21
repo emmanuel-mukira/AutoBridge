@@ -511,7 +511,7 @@ function Dashboard() {
             {isLoading ? (
               <Skeleton className="h-5 w-full max-w-md" />
             ) : (
-              "Overview of TazamaTech CRM operations for the current period."
+              "Overview of AutoBridge CRM operations for the current period."
             )}
           </div>
         </div>

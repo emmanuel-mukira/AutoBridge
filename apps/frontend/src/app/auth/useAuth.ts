@@ -5,25 +5,6 @@ export function useAuth() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isLoading = useAuthStore((state) => state.isLoading);
   const error = useAuthStore((state) => state.error);
-  const authMode = useAuthStore((state) => state.authMode);
-  const otpToken = useAuthStore((state) => state.otpToken);
   const actions = useAuthStore((state) => state.actions);
-
-  return {
-    user,
-    isAuthenticated,
-    isLoading,
-    error,
-    authMode,
-    otpToken,
-    login: actions.login,
-    logout: actions.logout,
-    checkSession: actions.checkSession,
-    // New custom auth methods
-    loginWithCredentials: actions.loginWithCredentials,
-    requestOTP: actions.requestOTP,
-    validateOTP: actions.validateOTP,
-    setAuthMode: actions.setAuthMode,
-    clearError: actions.clearError,
-  };
+  return { user, isAuthenticated, isLoading, error, login: actions.login, logout: actions.logout, checkSession: actions.checkSession };
 }

@@ -54,7 +54,7 @@ export function CustomerContactsDialog({
   const [deletingContact, setDeletingContact] = useState<CustomerContact | null>(null);
 
   const { data: contactsData, isLoading } = useCustomerContacts({
-    customerId: customer?.id,
+    accountId: customer?.id,
   });
   const deleteContactMutation = useDeleteCustomerContact();
 

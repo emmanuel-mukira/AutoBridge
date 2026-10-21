@@ -1,6 +1,5 @@
 export interface Quotation {
   id: number;
-  companyId: number;
   quoteNumber: string;
   version: number;
   customerId: number;

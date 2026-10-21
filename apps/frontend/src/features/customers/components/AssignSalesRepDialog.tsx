@@ -50,16 +50,11 @@ export function AssignSalesRepDialog({
   const assignSalesRepMutation = useAssignSalesRep();
 
   useEffect(() => {
-    // Only fetch if dialog is open and we have a fully loaded user with companyId
+    // Only fetch if dialog is open and we have a fully loaded user
     if (!open) return;
     
     if (!user) {
       console.log("[AssignSalesRepDialog] Waiting for user to be loaded...");
-      return;
-    }
-
-    if (!user.companyId) {
-      console.error("[AssignSalesRepDialog] User loaded but missing companyId:", user);
       return;
     }
 
@@ -72,7 +67,7 @@ export function AssignSalesRepDialog({
     setIsLoadingSalesReps(true);
     
     http
-      .get<ListUsersResponse>(`/api/users`, { params: { companyId: user.companyId } })
+      .get<ListUsersResponse>(`/api/users`)
       .then((response) => {
         console.log("[AssignSalesRepDialog] Response:", response.data);
         const reps = response.data.users?.filter((u: { role?: { name: string } }) => u.role?.name === "sales_rep") || [];

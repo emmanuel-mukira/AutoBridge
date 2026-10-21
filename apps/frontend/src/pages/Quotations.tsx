@@ -55,7 +55,7 @@ export default function Quotations() {
   const { openCreateDialog, openEditDialog, openDetailDialog, openVersionHistoryDialog } = useQuotationsStore();
   const [deletingQuotation, setDeletingQuotation] = useState<Quotation | null>(null);
 
-  const isAdmin = user?.roleId === 1;
+  const isAdmin = user?.role === "ADMIN";
 
   const { filters, addFilter, removeFilter, clearFilters } = useFilterStore();
   const activeFilters = filters[FILTER_KEY] || [];

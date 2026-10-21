@@ -1,6 +1,5 @@
 export interface AuditLog {
   id: number;
-  companyId: number;
   userId: number | null;
   action: string;
   description: string;

@@ -1,8 +1,8 @@
-# CRM API documentation
+# AutoBridge CRM API documentation
 
 The CRM API is the Express 5/TypeScript business API for the active CRM V1
 application. It owns request validation, CRM workflows, application roles,
-company access checks, audit logging, and persistence through Prisma.
+user ownership checks and persistence through Prisma.
 
 ## Code organization
 
@@ -10,27 +10,28 @@ company access checks, audit logging, and persistence through Prisma.
 - `src/controllers/` — request/response handling
 - `src/services/` — CRM business operations
 - `src/schemas/` — Zod input validation
-- `src/middleware/` — authentication, development proxy, rate limiting, and errors
-- `src/jobs/` — session cleanup and analytics synchronization
-- `prisma/` — schema, migrations, and seed data
+- `src/middleware/` — authentication, rate limiting, and errors
+- `prisma/automotive/` — active split schema, migrations, and development seed
 
 ## Development
 
-From the repository root:
+From the repository root, start PostgreSQL, then run the API from its own directory:
 
 ```bash
-pnpm install
-docker compose up -d postgres timescaledb redis authelia traefik mailpit
-pnpm --filter @tazamatech/crm-api dev
+docker compose up -d postgres
+cd apps/crm-api
+npm ci
+npm run dev
 ```
 
-See the repository [development setup](../../../docs/development/setup.md) and
-[commands](../../../docs/development/commands.md).
+See the repository [README](../../../README.md) and
+[application refactor plan](../../../docs/application-refactor-plan.md) for the
+current local setup and remaining work.
+Run `npm run seed:dev` from `apps/crm-api` to create or refresh the local
+development administrator and three sample customers.
 
 ## Detailed documentation
 
 - [Business logic](./business-logic.md)
-- [Database and tenant isolation](./database.md)
+- [Database and ownership](./database.md)
 - [Testing](./testing.md)
-- [System architecture](../../../docs/architecture/system-architecture.md)
-- [Security architecture](../../../docs/architecture/security.md)

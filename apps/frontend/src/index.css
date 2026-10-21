@@ -154,13 +154,5 @@
   }
   body {
     @apply bg-background text-foreground;
-    background-image: url('/images/backgrounds/light-bg.svg');
-    background-size: 100% 100%;
-    background-position: center;
-    background-repeat: no-repeat;
-    background-attachment: fixed;
-  }
-  body.dark {
-    background-image: url('/images/backgrounds/dark-bg.svg');
   }
 }

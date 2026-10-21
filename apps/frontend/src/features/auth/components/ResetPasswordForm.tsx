@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/PasswordInput";
 import { PasswordStrengthIndicator } from "@/components/PasswordStrengthIndicator";
 import { isPasswordStrong } from "@/lib/password-rules";
-import logo from "@/assets/tazamatech-logo.webp";
 
 interface ResetPasswordFormProps {
   token: string;
@@ -55,7 +54,7 @@ export function ResetPasswordForm({ token, email }: ResetPasswordFormProps) {
         <div className="p-8 space-y-6">
           <div className="text-center space-y-3">
             <div className="mx-auto block w-fit" aria-label="brand">
-              <img src={logo} alt="TazamaTech CRM" className="mx-auto h-12 w-auto object-contain" style={{ imageRendering: 'crisp-edges' }} />
+              <span className="text-xl font-semibold">AutoBridge CRM</span>
             </div>
             <div className="space-y-1">
               <h1 className="text-2xl font-bold tracking-tight">Password Reset</h1>
@@ -80,7 +79,7 @@ export function ResetPasswordForm({ token, email }: ResetPasswordFormProps) {
       <div className="p-8 space-y-6">
         <div className="text-center space-y-3">
           <div className="mx-auto block w-fit" aria-label="brand">
-            <img src={logo} alt="TazamaTech CRM" className="mx-auto h-12 w-auto object-contain" style={{ imageRendering: 'crisp-edges' }} />
+            <span className="text-xl font-semibold">AutoBridge CRM</span>
           </div>
           <div className="space-y-1">
             <h1 className="text-2xl font-bold tracking-tight">Set New Password</h1>

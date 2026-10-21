@@ -77,7 +77,7 @@ export function CreateInteractionWizard({ open, onOpenChange }: CreateInteractio
   const notes = watch("notes");
 
   const customers = customersData?.customers || [];
-  const { data: contactsData } = useCustomerContacts(customerId ? { customerId } : undefined);
+  const { data: contactsData } = useCustomerContacts(customerId ? { accountId: customerId } : undefined);
   const contacts = contactsData?.contacts || [];
 
   const onSubmit = async (data: CreateInteractionInput) => {

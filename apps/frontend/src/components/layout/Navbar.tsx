@@ -13,7 +13,7 @@ import {
 import { useEffect, useState, useCallback, memo } from "react";
 import { useAuth } from "@/app/auth/useAuth";
 import { SidebarLinks } from "./Sidebar";
-import logo from "../../assets/tazamatech-logo.webp";
+import { useUIActions, useUIStore } from "@/app/store";
 
 function NavbarComponent() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
@@ -21,6 +21,8 @@ function NavbarComponent() {
   const navigate = useNavigate();
   const location = useLocation();
   const onDashboard = location.pathname.startsWith("/dashboard");
+  const displayCurrency = useUIStore((state) => state.displayCurrency);
+  const { setDisplayCurrency } = useUIActions();
 
   useEffect(() => {
     const stored = localStorage.getItem("theme");
@@ -56,7 +58,7 @@ function NavbarComponent() {
             </SheetTrigger>
             <SheetContent side="left" className="w-[240px] sm:w-[300px] p-0">
               <SheetHeader className="p-4 border-b text-left">
-                <SheetTitle>TazamaTech CRM</SheetTitle>
+                <SheetTitle>AutoBridge CRM</SheetTitle>
               </SheetHeader>
               <div className="py-4">
                 <nav className="flex flex-col gap-1 px-2">
@@ -90,12 +92,7 @@ function NavbarComponent() {
         {/* Brand / Logo - Only show on non-dashboard pages */}
         {!onDashboard && (
           <Link to="/" className="flex items-center gap-2 font-semibold">
-             <img
-              src={logo}
-              alt="TazamaTech CRM"
-              className="h-12 w-auto object-contain"
-              style={{ imageRendering: 'crisp-edges' }}
-            />
+            <span className="text-lg">AutoBridge CRM</span>
           </Link>
         )}
 
@@ -113,6 +110,15 @@ function NavbarComponent() {
 
         {/* Right Actions */}
         <div className="flex items-center gap-2 ml-auto">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setDisplayCurrency(displayCurrency === "KES" ? "USD" : "KES")}
+            aria-label={`Display currency is ${displayCurrency}. Switch to ${displayCurrency === "KES" ? "USD" : "KES"}`}
+            title="Display currency only; stored values and predictions do not change"
+          >
+            {displayCurrency}
+          </Button>
           {/* Theme Toggle */}
           <Button 
             variant="ghost" 

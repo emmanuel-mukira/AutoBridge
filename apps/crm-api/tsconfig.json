@@ -5,6 +5,7 @@
     "moduleResolution": "NodeNext",
     "types": ["node"],
     "lib": ["ES2022"],
+    "rootDir": ".",
     // Remove "rootDir": "src" to allow files outside /src
     "outDir": "dist",
     "noEmit": false,
@@ -15,9 +16,8 @@
     "resolveJsonModule": true
   },
   "include": [
-    "src/**/*",
-    "prisma/**/*.ts",
-    "prisma.config.ts"
+    "src/index.ts",
+    "src/types/**/*.d.ts"
   ],
   "exclude": [
     "node_modules",

@@ -12,7 +12,7 @@ import { useAuth } from "@/app/auth/useAuth";
 
 export default function Leads() {
   const { user } = useAuth();
-  const isAdmin = user?.roleId === 1;
+  const isAdmin = user?.role === "ADMIN";
   const openCreateDialog = useLeadsStore((state) => state.openCreateDialog);
   const [selectedSalesRepId, setSelectedSalesRepId] = useState<number | null>(null);
 

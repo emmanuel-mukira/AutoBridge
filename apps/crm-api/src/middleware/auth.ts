@@ -1,152 +1,103 @@
-import { NextFunction, Request, Response } from "express";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import type { NextFunction, Request, Response } from "express";
 import { prisma } from "../client.js";
-import logger from "../lib/logger.js";
 
-/**
- * Per-process in-memory cache for Authelia header → DB user resolution.
- * Keyed by email (from Remote-Email header). TTL: 5 minutes.
- *
- * Why: Authelia's Remote-User is a username string, NOT a numeric ID.
- * We need the numeric userId and companyId from our DB for RLS and queries.
- * Caching avoids a DB hit on every request without sacrificing freshness.
- */
-interface CachedUser {
-  id: number;
-  companyId: number;
-  expiresAt: number;
+const SESSION_COOKIE = "crm_session";
+const SESSION_MS = 8 * 60 * 60 * 1000;
+
+function secret(): string {
+  const value = process.env.SESSION_SECRET;
+  if (!value || value.length < 32) throw new Error("SESSION_SECRET must be at least 32 characters");
+  return value;
 }
 
-const USER_CACHE = new Map<string, CachedUser>();
-const CACHE_TTL_MS = 5 * 60 * 1000;
-
-function getCachedUser(email: string): CachedUser | null {
-  const entry = USER_CACHE.get(email);
-  if (!entry) return null;
-  if (Date.now() > entry.expiresAt) {
-    USER_CACHE.delete(email);
-    return null;
-  }
-  return entry;
+export function validateAuthConfig(): void {
+  secret();
+  if (!process.env.FRONTEND_ORIGIN) throw new Error("FRONTEND_ORIGIN is required");
 }
 
-function setCachedUser(email: string, id: number, companyId: number): void {
-  USER_CACHE.set(email, {
-    id,
-    companyId,
-    expiresAt: Date.now() + CACHE_TTL_MS,
+export function hashToken(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+export function csrfToken(sessionToken: string): string {
+  return createHmac("sha256", secret()).update(sessionToken).digest("hex");
+}
+
+export function setSessionCookie(res: Response, token: string): void {
+  res.cookie(SESSION_COOKIE, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: SESSION_MS,
   });
 }
 
-/**
- * requireAuth — Authelia forward-auth middleware.
- *
- * Traefik injects these headers after Authelia validates the session cookie:
- *   Remote-User   → Authelia username string (e.g. "john.doe") — NOT a numeric ID
- *   Remote-Groups → comma-separated group names (e.g. "admin,crm_users")
- *   Remote-Email  → user email — used to look up our DB record
- *   Remote-Name   → display name
- *
- * Traefik strips any incoming Remote-* headers from the client and only
- * re-injects them after Authelia validation, so spoofing is prevented at
- * the proxy layer. In production the backend must only be reachable via Traefik.
- *
- * We resolve numeric userId and companyId from the DB using Remote-Email,
- * with an in-memory cache to avoid a DB hit on every request.
- */
-export function requireAuth() {
-  return async (
-    req: Request,
-    res: Response,
-    next: NextFunction,
-  ): Promise<void> => {
-    const remoteEmail = req.headers["remote-email"] as string | undefined;
-    const remoteUser = req.headers["remote-user"] as string | undefined;
-    const remoteGroups = req.headers["remote-groups"] as string | undefined;
-    const remoteName = req.headers["remote-name"] as string | undefined;
+export function clearSessionCookie(res: Response): void {
+  res.clearCookie(SESSION_COOKIE, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+  });
+}
 
-    if (!remoteEmail) {
-      logger.warn(
-        { url: req.url },
-        "Missing Remote-Email header — request not from Authelia/Traefik",
-      );
+export function sessionExpiry(): Date {
+  return new Date(Date.now() + SESSION_MS);
+}
+
+export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const token = req.cookies?.[SESSION_COOKIE];
+  if (typeof token !== "string" || !/^[a-f0-9]{64}$/.test(token)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  try {
+    const session = await prisma.session.findUnique({
+      where: { tokenHash: hashToken(token) },
+      include: { user: true },
+    });
+    if (!session || session.revokedAt || session.expiresAt <= new Date() || !session.user.active) {
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
+    req.user = {
+      id: session.user.id,
+      email: session.user.email,
+      firstName: session.user.firstName,
+      lastName: session.user.lastName,
+      role: session.user.role,
+      sessionId: session.id,
+      sessionToken: token,
+      csrfHash: session.csrfHash,
+    };
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
 
-    const groups = remoteGroups
-      ? remoteGroups
-          .split(",")
-          .map((g) => g.trim())
-          .filter(Boolean)
-      : [];
-
-    const cached = getCachedUser(remoteEmail);
-    if (cached) {
-      req.user = {
-        id: cached.id,
-        username: remoteUser ?? remoteEmail,
-        email: remoteEmail,
-        name: remoteName ?? "",
-        groups,
-        companyId: cached.companyId,
-      };
-      next();
-      return;
-    }
-
-    try {
-      const dbUser = await prisma.user.findUnique({
-        where: { email: remoteEmail },
-        select: { id: true, companyId: true },
-      });
-
-      if (!dbUser) {
-        logger.warn({ email: remoteEmail }, "Authelia user not found in DB");
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-      }
-
-      setCachedUser(remoteEmail, dbUser.id, dbUser.companyId);
-
-      req.user = {
-        id: dbUser.id,
-        username: remoteUser ?? remoteEmail,
-        email: remoteEmail,
-        name: remoteName ?? "",
-        groups,
-        companyId: dbUser.companyId,
-      };
-
-      logger.debug(
-        { userId: dbUser.id, companyId: dbUser.companyId, groups },
-        "Authelia auth ok",
-      );
-      next();
-    } catch (err) {
-      logger.error({ err }, "requireAuth DB lookup failed");
-      res.status(500).json({ error: "Internal server error" });
-    }
+export function requireRole(role: "ADMIN" | "SALES_REP") {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.user) return void res.status(401).json({ error: "Unauthorized" });
+    if (req.user.role !== role) return void res.status(403).json({ error: "Forbidden" });
+    next();
   };
 }
 
-/**
- * requireRole — checks that the authenticated user belongs to the required Authelia group.
- * Authelia group names in your configuration must match: "admin" | "sales_rep"
- */
-export function requireRole(roleName: "admin" | "sales_rep") {
-  return (req: Request, res: Response, next: NextFunction): void => {
-    if (!req.user) {
-      res.status(401).json({ error: "Unauthorized" });
-      return;
-    }
-    if (!req.user.groups.includes(roleName)) {
-      logger.warn(
-        { userId: req.user.id, required: roleName, groups: req.user.groups },
-        "Forbidden",
-      );
-      res.status(403).json({ error: "Forbidden" });
-      return;
-    }
-    next();
-  };
+export function requireCsrf(req: Request, res: Response, next: NextFunction): void {
+  if (!req.user) return void res.status(401).json({ error: "Unauthorized" });
+  const received = req.header("X-CSRF-Token");
+  if (!received || !/^[a-f0-9]{64}$/.test(received) || !timingSafeEqual(Buffer.from(hashToken(received)), Buffer.from(req.user.csrfHash))) {
+    return void res.status(403).json({ error: "Invalid CSRF token" });
+  }
+  next();
+}
+
+export function requireTrustedOrigin(req: Request, res: Response, next: NextFunction): void {
+  const origin = req.header("Origin");
+  const allowed = (process.env.FRONTEND_ORIGIN ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+  if (origin && !allowed.includes(origin)) return void res.status(403).json({ error: "Origin not allowed" });
+  next();
 }

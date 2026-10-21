@@ -1,0 +1,15 @@
+model ProductGroup {
+  id        Int               @id @default(autoincrement())
+  name      String            @unique
+  subgroups ProductSubgroup[]
+}
+
+model ProductSubgroup {
+  id             Int           @id @default(autoincrement())
+  productGroupId Int
+  name           String
+  productGroup   ProductGroup  @relation(fields: [productGroupId], references: [id])
+  opportunities  Opportunity[]
+
+  @@unique([productGroupId, name])
+}

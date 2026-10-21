@@ -1,0 +1,57 @@
+model Account {
+  id              Int       @id @default(autoincrement())
+  businessName    String
+  countyName      String
+  locationAddress String
+  shortHistory    String?
+  ownerId         Int
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  owner            User                    @relation("AccountOwner", fields: [ownerId], references: [id])
+  contacts         Contact[]
+  opportunities    Opportunity[]
+  interactions     Interaction[]
+  followUps        FollowUp[]
+  revenueSummaries AccountRevenueSummary[]
+
+  @@index([businessName])
+  @@index([ownerId, deletedAt])
+}
+
+model Contact {
+  id        Int      @id @default(autoincrement())
+  accountId Int
+  firstName String
+  lastName  String
+  email     String?
+  phone     String?
+  title     String?
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+}
+
+model AccountRevenueSummary {
+  id             Int      @id @default(autoincrement())
+  accountId      Int
+  amount         Decimal  @db.Decimal(18, 2)
+  currency       String   @db.VarChar(3)
+  coverageStart  DateTime
+  coverageEnd    DateTime
+  evidenceSource String
+  verifiedAt     DateTime
+  verifiedById   Int?
+  createdAt      DateTime @default(now())
+
+  account     Account                 @relation(fields: [accountId], references: [id])
+  verifiedBy  User?                   @relation(fields: [verifiedById], references: [id])
+  predictions OpportunityPrediction[]
+
+  @@index([accountId, coverageEnd])
+}

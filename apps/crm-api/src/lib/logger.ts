@@ -6,14 +6,8 @@ import type { Request } from "express";
 /**
  * Structured JSON logger for the CRM backend.
  * - Development: pino-pretty for readable terminal output
- * - Production: JSON to stdout → Docker captures → Vector collects → Loki stores
+ * - Production: JSON to stdout
  */
-
-interface TenantContext {
-  companyId?: number;
-  userId?: number;
-  roleId?: number;
-}
 
 const isProduction = process.env.NODE_ENV === "production";
 
@@ -21,7 +15,7 @@ export const logger = pino({
   level: process.env.LOG_LEVEL || "info",
   timestamp: pino.stdTimeFunctions.isoTime,
   base: {
-    service: "crm-backend",
+    service: "autobridge-api",
     env: process.env.NODE_ENV || "development",
   },
   redact: {
@@ -48,30 +42,11 @@ export const logger = pino({
     : {}),
 });
 
-/**
- * Creates a child logger with tenant context extracted from the JWT.
- * Use this inside authenticated routes where req.user is available.
- */
-export function createTenantLogger(context: TenantContext): pino.Logger {
-  return logger.child({
-    companyId: context.companyId,
-    userId: context.userId,
-    roleId: context.roleId,
-  });
-}
-
-/**
- * Creates a child logger from an Express request.
- * Extracts tenant context from req.user if available.
- */
+/** Creates a child logger from an Express request. */
 export function createRequestLogger(req: Request): pino.Logger {
-  const user = (req as unknown as Record<string, unknown>).user as
-    | TenantContext
-    | undefined;
   return logger.child({
-    companyId: user?.companyId,
-    userId: user?.userId,
-    roleId: user?.roleId,
+    userId: req.user?.id,
+    role: req.user?.role,
     method: req.method,
     url: req.originalUrl,
     requestId: req.headers["x-request-id"] || undefined,
@@ -82,7 +57,7 @@ export function createRequestLogger(req: Request): pino.Logger {
  * Pino-http middleware — replaces morgan("dev").
  * Automatically logs every HTTP request/response as structured JSON.
  *
- * Each log line includes: method, url, statusCode, responseTime, companyId, userId, roleId
+ * Each log line includes: method, url, statusCode, responseTime and authenticated user context.
  */
 export const httpLogger = pinoHttp({
   logger,
@@ -93,13 +68,10 @@ export const httpLogger = pinoHttp({
     },
   },
   customProps: (req: IncomingMessage) => {
-    const user = (req as unknown as Record<string, unknown>).user as
-      | TenantContext
-      | undefined;
+    const user = (req as Request).user;
     return {
-      companyId: user?.companyId,
-      userId: user?.userId,
-      roleId: user?.roleId,
+      userId: user?.id,
+      role: user?.role,
     };
   },
   customSuccessMessage: (req: IncomingMessage, res: ServerResponse) => {

@@ -4,7 +4,7 @@ import { Separator } from "@/components/ui/separator";
 
 export default function Settings() {
   const { user } = useAuth();
-  const isAdmin = user?.roleId === 1;
+  const isAdmin = user?.role === "ADMIN";
 
   return (
     <div className="container mx-auto p-6 max-w-4xl">
