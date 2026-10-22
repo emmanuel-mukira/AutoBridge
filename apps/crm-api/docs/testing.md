@@ -9,6 +9,7 @@ npm run build
 npm run verify:foundation
 npm run verify:opportunities
 npm run verify:activities
+npm run verify:analytics
 npm run seed:dev
 curl http://127.0.0.1:3000/health
 ```
@@ -29,5 +30,7 @@ When validating the CRM API, cover:
 - login, logout, session expiry, and CSRF failure paths.
 - interaction/client/opportunity relationship validation;
 - follow-up rescheduling and idempotent completion.
+- analytics authentication, owner scope, filters, lifecycle counts and empty win-rate behavior;
+- exact KES/USD pipeline conversion, activity counts and live aggregate updates.
 
-Dashboard, analytics and ML scoring workflows remain later checkpoints.
+Manual dashboard layout, responsive behavior and dark mode remain browser acceptance work. ML scoring remains a later checkpoint.

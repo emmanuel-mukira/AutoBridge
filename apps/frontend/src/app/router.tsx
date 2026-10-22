@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import { createBrowserRouter } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import AppLayout from "./AppLayout";
 import ProtectedRoute from "../components/shared/ProtectedRoute";
@@ -8,6 +8,7 @@ import { LoadingFallback } from "../components/shared/LoadingFallback";
 const Home = lazy(() => import("../pages/Home"));
 const Login = lazy(() => import("../pages/Login"));
 const Dashboard = lazy(() => import("../pages/Dashboard"));
+const DashboardOverview = lazy(() => import("../pages/dashboard/Overview"));
 const Clients = lazy(() => import("../pages/Clients"));
 const ClientDetails = lazy(() => import("../pages/ClientDetails"));
 const Opportunities = lazy(() => import("../pages/Opportunities"));
@@ -24,7 +25,7 @@ export const router = createBrowserRouter([{
     { index: true, element: loaded(<Home />) },
     { path: "/login", element: loaded(<GuestRoute><Login /></GuestRoute>) },
     { path: "/dashboard", element: loaded(<ProtectedRoute><Dashboard /></ProtectedRoute>), children: [
-      { index: true, element: <Navigate to="clients" replace /> },
+      { index: true, element: loaded(<DashboardOverview />) },
       { path: "clients", element: loaded(<Clients />) },
       { path: "clients/:id", element: loaded(<ClientDetails />) },
       { path: "opportunities", element: loaded(<Opportunities />) },

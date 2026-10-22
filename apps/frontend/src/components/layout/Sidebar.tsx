@@ -6,7 +6,8 @@ import {
   Building2,
   BriefcaseBusiness,
   CalendarClock,
-  MessagesSquare
+  MessagesSquare,
+  LayoutDashboard
 } from "lucide-react";
 import { useAuth } from "@/app/auth/useAuth";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ type SidebarLinksProps = {
 
 export const SidebarLinks = memo(function SidebarLinks({ collapsed = false }: SidebarLinksProps) {
   const regularLinks = [
+    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, end: true },
     { to: "/dashboard/clients", label: "Clients", icon: Building2 },
     { to: "/dashboard/opportunities", label: "Opportunities", icon: BriefcaseBusiness },
     { to: "/dashboard/interactions", label: "Interactions", icon: MessagesSquare },
@@ -29,10 +31,11 @@ export const SidebarLinks = memo(function SidebarLinks({ collapsed = false }: Si
     <nav className="flex flex-col px-2">
       <div className="space-y-2">
         <div className="space-y-1">
-          {regularLinks.map(({ to, label, icon: Icon }) => (
+          {regularLinks.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
+              end={end}
               className={({ isActive }) =>
                 cn(
                   "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all hover:text-primary",

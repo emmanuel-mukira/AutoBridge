@@ -1,6 +1,6 @@
 import React from "react";
-import { PieChart } from '@mui/x-charts/PieChart';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PieChart } from "@mui/x-charts/PieChart";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface StatusData {
   status: string;
@@ -9,91 +9,79 @@ interface StatusData {
 
 interface StatusDistributionChartProps {
   data: StatusData[];
+  title?: string;
+  description?: string;
 }
 
-export const StatusDistributionChart = React.memo(function StatusDistributionChart({ data }: StatusDistributionChartProps) {
-  const colorMap: Record<string, string> = {
-    'DRAFT': '#6b7280',
-    'OPEN': '#3b82f6',
-    'WON': '#10b981',
-    'LOST': '#ef4444',
-  };
+const outcomeColors: Record<string, string> = {
+  OPEN: "#2563eb",
+  WON: "#16a34a",
+  LOST: "#dc2626",
+};
 
-  const muiData = data.map((item) => ({
+export const StatusDistributionChart = React.memo(function StatusDistributionChart({
+  data,
+  title = "Opportunity outcome",
+  description = "Open pipeline records and resolved outcomes",
+}: StatusDistributionChartProps) {
+  const chartData = data.map((item) => ({
     id: item.status,
-    value: item.count === 0 && data.length === 1 ? 1 : item.count,
-    label: item.status,
-    color: colorMap[item.status] || '#8b5cf6',
+    value: item.count,
+    label: item.status.charAt(0) + item.status.slice(1).toLowerCase(),
+    color: outcomeColors[item.status] ?? "#64748b",
   }));
-
-  const colors = muiData.map(item => item.color);
 
   if (data.length === 0) {
     return (
-      <Card className="flex flex-col h-full border border-muted/20 shadow-[0_4px_12px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_12px_rgba(0,0,0,0.3)] overflow-hidden bg-card/80 backdrop-blur-sm">
-        <CardHeader className="items-center pb-3 border-b bg-muted/5">
-          <CardTitle className="text-lg font-bold">Lead Distribution</CardTitle>
+      <Card className="flex h-full flex-col overflow-hidden border-muted/40 bg-card/50 shadow-sm backdrop-blur-sm">
+        <CardHeader className="border-b bg-muted/5 py-3">
+          <CardTitle className="text-sm font-bold uppercase tracking-[0.15em]">{title}</CardTitle>
+          <CardDescription className="mt-1 text-xs">{description}</CardDescription>
         </CardHeader>
-        <CardContent className="flex-1 p-6 flex items-center justify-center min-h-[240px]">
-          <p className="text-sm text-muted-foreground">No data available for this period</p>
+        <CardContent className="flex min-h-44 flex-1 items-center justify-center text-sm text-muted-foreground">
+          No outcome data for this period.
         </CardContent>
       </Card>
     );
   }
 
-  const totalCount = muiData.reduce((sum, item) => sum + item.value, 0);
+  const totalCount = chartData.reduce((sum, item) => sum + item.value, 0);
 
   return (
-    <Card className="flex flex-col h-full border border-muted/20 shadow-[0_4px_12px_rgba(0,0,0,0.08)] dark:shadow-[0_4px_12px_rgba(0,0,0,0.3)] overflow-hidden bg-card/80 backdrop-blur-sm">
-      <CardHeader className="pb-3 border-b bg-muted/5">
-        <CardTitle className="text-lg font-bold text-center">Lead Distribution</CardTitle>
+    <Card className="flex h-full flex-col overflow-hidden border-muted/40 bg-card/50 shadow-sm backdrop-blur-sm">
+      <CardHeader className="border-b bg-muted/5 py-3">
+        <CardTitle className="text-sm font-bold uppercase tracking-[0.15em]">{title}</CardTitle>
+        <CardDescription className="mt-1 text-xs">{description}</CardDescription>
       </CardHeader>
-      <CardContent className="flex-1 p-6 flex flex-col items-center">
-        <div className="relative w-40 h-40 mb-6">
+      <CardContent className="flex flex-1 flex-col items-center p-4">
+        <div className="relative mb-4 h-36 w-36">
           <PieChart
-            series={[
-              {
-                data: muiData,
-                innerRadius: 50,
-                outerRadius: 75,
-                paddingAngle: 3,
-                cornerRadius: 4,
-                cx: 80,
-                cy: 80,
-              },
-            ]}
-            colors={colors}
-            width={160}
-            height={160}
-            slotProps={{
-              legend: { 
-                position: { vertical: 'bottom', horizontal: 'center' },
-              },
-            }}
-            sx={{
-              "& .MuiChartsLegend-root": {
-                display: "none",
-              },
-            }}
+            series={[{
+              data: chartData,
+              innerRadius: 45,
+              outerRadius: 68,
+              paddingAngle: 3,
+              cornerRadius: 4,
+              cx: 72,
+              cy: 72,
+              valueFormatter: (item) => `${item.value.toLocaleString()} opportunities`,
+            }]}
+            width={144}
+            height={144}
+            hideLegend
           />
-          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span className="text-xl font-black">{totalCount}</span>
-            <span className="text-[9px] font-bold text-muted-foreground uppercase">Total</span>
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+            <span className="text-xl font-bold tabular-nums">{totalCount.toLocaleString()}</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Total</span>
           </div>
         </div>
 
-        {/* Custom Legend - 2x2 grid */}
-        <div className="grid grid-cols-2 gap-x-6 gap-y-3 w-full">
-          {muiData.map((item) => (
-            <div key={item.id} className="flex items-center gap-3">
-              <div 
-                className="w-2.5 h-2.5 rounded-full" 
-                style={{ backgroundColor: item.color }}
-              />
-              <div>
-                <p className="text-[10px] uppercase font-bold text-muted-foreground leading-none">{item.label}</p>
-                <p className="text-lg font-bold leading-none mt-1">{item.value}</p>
-              </div>
+        <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3" aria-label="Opportunity outcome legend">
+          {chartData.map((item) => (
+            <div key={item.id} className="flex items-center gap-2 rounded-md border border-muted/40 px-3 py-2">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+              <span className="min-w-0 flex-1 text-xs font-medium text-muted-foreground">{item.label}</span>
+              <span className="text-sm font-semibold tabular-nums">{item.value.toLocaleString()}</span>
             </div>
           ))}
         </div>

@@ -15,11 +15,11 @@ export function AnalyticsHeader({ isAdmin, lastUpdated }: AnalyticsHeaderProps) 
         </h1>
         <div className="flex items-center text-sm text-muted-foreground">
           <p>
-            {isAdmin ? 'System-wide insights and metrics' : 'Track your sales performance'}
+            {isAdmin ? 'Operational pipeline and activity reporting' : 'Your pipeline and sales activity'}
           </p>
           <span className="mx-2">•</span>
           <div className="flex items-center">
-            <RefreshCw className="mr-1 h-3 w-3 animate-spin duration-[3000ms]" />
+            <RefreshCw className="mr-1 h-3 w-3" />
             Updated {lastUpdated.toLocaleTimeString()}
           </div>
         </div>

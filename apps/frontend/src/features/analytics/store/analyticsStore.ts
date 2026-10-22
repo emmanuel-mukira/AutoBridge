@@ -110,11 +110,6 @@ export const useAnalyticsStore = create<AnalyticsStore>((set) => ({
         to = toKenyaDate(year, month, day, 23, 59, 59, 999);
     }
 
-    console.log(`[Analytics Filter] ${type}:`, {
-      from: from.toISOString(),
-      to: to.toISOString(),
-    });
-
     set({ dateRange: { from, to } });
   },
 

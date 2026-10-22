@@ -19,7 +19,7 @@ export default function ProtectedRoute({ children, requireAdmin = false }: Prote
     return null;
   }
 
-  // Not authenticated — redirect to /login which triggers Traefik → Authelia redirect
+  // Send unauthenticated users to the application login page.
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
