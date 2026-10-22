@@ -1,4 +1,4 @@
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,59 +9,61 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useSaveAccount } from "../hooks/useAccounts";
-import { useAccountOwners } from "../hooks/useAccounts";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useSaveClient } from "../hooks/useClients";
+import { useClientOwners } from "../hooks/useClients";
 import { useAuth } from "@/app/auth/useAuth";
-import type { Account, AccountInput } from "../services/accountsApi";
+import type { Client, ClientInput } from "../services/clientsApi";
 
-interface AccountDialogProps {
+interface ClientDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess?: (account: Account) => void;
-  account?: Account;
+  onSuccess?: (client: Client) => void;
+  client?: Client;
 }
 
-export function AccountDialog({
+export function ClientDialog({
   open,
   onOpenChange,
   onSuccess,
-  account,
-}: AccountDialogProps) {
-  const saveAccount = useSaveAccount();
+  client,
+}: ClientDialogProps) {
+  const saveClient = useSaveClient();
   const { user } = useAuth();
-  const { data: owners } = useAccountOwners();
-  const isEditing = !!account;
+  const { data: owners } = useClientOwners();
+  const isEditing = !!client;
 
   const {
     register,
     handleSubmit,
     reset,
     setValue,
+    control,
     formState: { errors },
-  } = useForm<AccountInput>({
+  } = useForm<ClientInput>({
     mode: "onBlur",
   });
 
   useEffect(() => {
-    if (account) {
-      setValue("businessName", account.businessName);
-      setValue("countyName", account.countyName);
-      setValue("locationAddress", account.locationAddress);
-      setValue("shortHistory", account.shortHistory || "");
-      setValue("ownerId", account.ownerId);
+    if (client) {
+      setValue("businessName", client.businessName);
+      setValue("countyName", client.countyName);
+      setValue("locationAddress", client.locationAddress);
+      setValue("shortHistory", client.shortHistory || "");
+      setValue("ownerId", client.ownerId);
     } else if (user) {
       setValue("ownerId", user.id);
     }
-  }, [account, setValue, user]);
+  }, [client, setValue, user]);
 
-  const onSubmit = async (data: AccountInput) => {
+  const onSubmit = async (data: ClientInput) => {
     try {
-      const saved = await saveAccount.mutateAsync({ id: account?.id, input: data });
+      const saved = await saveClient.mutateAsync({ id: client?.id, input: data });
       reset();
       onOpenChange(false);
       onSuccess?.(saved);
     } catch (error) {
-      console.error("Failed to save account:", error);
+      console.error("Failed to save client:", error);
     }
   };
 
@@ -74,7 +76,7 @@ export function AccountDialog({
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "Edit account" : "Create account"}</DialogTitle>
+          <DialogTitle>{isEditing ? "Edit client" : "Create client"}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -99,10 +101,8 @@ export function AccountDialog({
           </div>
 
           {user?.role === "ADMIN" && <div className="space-y-2">
-            <Label htmlFor="ownerId">Account owner *</Label>
-            <select id="ownerId" className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm" {...register("ownerId", { valueAsNumber: true, required: "Owner is required" })}>
-              {owners?.map((owner) => <option key={owner.id} value={owner.id}>{owner.firstName} {owner.lastName} ({owner.role === "ADMIN" ? "Administrator" : "Sales representative"})</option>)}
-            </select>
+            <Label htmlFor="ownerId">Client owner *</Label>
+            <Controller name="ownerId" control={control} rules={{ required: "Owner is required" }} render={({ field }) => <Select value={field.value ? String(field.value) : ""} onValueChange={(value) => field.onChange(Number(value))}><SelectTrigger id="ownerId"><SelectValue placeholder="Select owner" /></SelectTrigger><SelectContent>{owners?.map((owner) => <SelectItem key={owner.id} value={String(owner.id)}>{owner.firstName} {owner.lastName} ({owner.role === "ADMIN" ? "Administrator" : "Sales representative"})</SelectItem>)}</SelectContent></Select>} />
             {errors.ownerId && <p className="text-sm text-destructive">{errors.ownerId.message}</p>}
           </div>}
 
@@ -154,7 +154,7 @@ export function AccountDialog({
             />
           </div>
 
-          {saveAccount.error && <p role="alert" className="text-sm text-destructive">{saveAccount.error.message}</p>}
+          {saveClient.error && <p role="alert" className="text-sm text-destructive">{saveClient.error.message}</p>}
 
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={handleClose}>
@@ -163,17 +163,17 @@ export function AccountDialog({
             <Button 
               type="submit" 
               disabled={
-                saveAccount.isPending ||
+                saveClient.isPending ||
                 Object.keys(errors).length > 0
               }
             >
               {isEditing
-                ? saveAccount.isPending
+                ? saveClient.isPending
                   ? "Updating..."
-                  : "Update account"
-                : saveAccount.isPending
+                  : "Update client"
+                : saveClient.isPending
                 ? "Creating..."
-                : "Create account"}
+                : "Create client"}
             </Button>
           </div>
         </form>

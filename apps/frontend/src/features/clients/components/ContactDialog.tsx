@@ -17,20 +17,20 @@ import type { Contact, ContactInput } from "@/types/contact";
 interface ContactDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  accountId: number;
-  accountName: string;
+  clientId: number;
+  clientName: string;
   contact?: Contact | null;
 }
 
 export function ContactDialog({
   open,
   onOpenChange,
-  accountId,
-  accountName,
+  clientId,
+  clientName,
   contact,
 }: ContactDialogProps) {
   const createContactMutation = useCreateContact();
-  const updateContactMutation = useUpdateContact(accountId);
+  const updateContactMutation = useUpdateContact(clientId);
 
   const {
     register,
@@ -41,7 +41,7 @@ export function ContactDialog({
     formState: { errors },
   } = useForm<ContactInput>({
     defaultValues: {
-      accountId,
+      clientId,
       isPrimary: false,
     },
   });
@@ -59,12 +59,12 @@ export function ContactDialog({
         setValue("isPrimary", contact.isPrimary);
       } else {
         reset({
-          accountId,
+          clientId,
           isPrimary: false,
         });
       }
     }
-  }, [open, contact, accountId, reset, setValue]);
+  }, [open, contact, clientId, reset, setValue]);
 
   const onSubmit = async (data: ContactInput) => {
     try {
@@ -100,7 +100,7 @@ export function ContactDialog({
         <DialogHeader className="flex-shrink-0">
           <DialogTitle>{contact ? "Edit Contact" : "Add Contact"}</DialogTitle>
           <DialogDescription>
-            {contact ? "Update contact information" : `Add a new contact for ${accountName}`}
+            {contact ? "Update contact information" : `Add a new contact for ${clientName}`}
           </DialogDescription>
         </DialogHeader>
 

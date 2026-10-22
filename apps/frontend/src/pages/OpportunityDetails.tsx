@@ -9,6 +9,7 @@ import { OpportunityDialog } from "@/features/opportunities/components/Opportuni
 import { useOpportunity } from "@/features/opportunities/hooks/useOpportunities";
 import { opportunityStageClass, opportunityStageLabels, salesRouteLabels } from "@/features/opportunities/utils/labels";
 import { Building2, CalendarDays, Pencil, UserRound } from "lucide-react";
+import { ActivitySection } from "@/features/activities/components/ActivitySection";
 
 export default function OpportunityDetails() {
   const [editOpen, setEditOpen] = useState(false);
@@ -21,7 +22,7 @@ export default function OpportunityDetails() {
     {error && <p role="alert" className="text-destructive">Opportunity not found or access denied.</p>}
     {opportunity && <><Card>
       <CardHeader className="gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="space-y-2"><CardTitle className="text-2xl">{opportunity.title}</CardTitle><Link className="flex items-center gap-2 text-sm text-primary hover:underline" to={`/dashboard/accounts/${opportunity.account.id}`}><Building2 className="h-4 w-4" />{opportunity.account.businessName}</Link></div>
+        <div className="space-y-2"><CardTitle className="text-2xl">{opportunity.title}</CardTitle><Link className="flex items-center gap-2 text-sm text-primary hover:underline" to={`/dashboard/clients/${opportunity.client.id}`}><Building2 className="h-4 w-4" />{opportunity.client.businessName}</Link></div>
         <Button onClick={() => setEditOpen(true)}><Pencil className="mr-2 h-4 w-4" />Edit opportunity</Button>
       </CardHeader>
       <CardContent className="border-t pt-6"><dl className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -32,6 +33,6 @@ export default function OpportunityDetails() {
         <div><dt className="text-sm text-muted-foreground">Product</dt><dd className="mt-1 font-medium">{opportunity.productSubgroup ? `${opportunity.productSubgroup.productGroup.name} — ${opportunity.productSubgroup.name}` : "Not selected"}</dd></div>
         <div><dt className="text-sm text-muted-foreground">Estimated close</dt><dd className="mt-1 flex items-center gap-2 font-medium"><CalendarDays className="h-4 w-4 text-muted-foreground" />{opportunity.estimatedCloseAt ? new Date(opportunity.estimatedCloseAt).toLocaleDateString() : "Not set"}</dd></div>
       </dl></CardContent>
-    </Card><OpportunityDialog open={editOpen} onOpenChange={setEditOpen} opportunity={opportunity} /></>}
+    </Card><ActivitySection clientId={opportunity.clientId} opportunityId={opportunity.id} /><OpportunityDialog open={editOpen} onOpenChange={setEditOpen} opportunity={opportunity} /></>}
   </section>;
 }

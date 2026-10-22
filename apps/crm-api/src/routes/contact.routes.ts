@@ -28,7 +28,7 @@ router.post("/", requireTrustedOrigin, requireCsrf, async (req, res, next) => {
   if (!parsed.success) return void res.status(400).json({ error: "Invalid contact data" });
   try {
     const contact = await service.create(req.user!, parsed.data);
-    if (!contact) return void res.status(404).json({ error: "Account not found" });
+    if (!contact) return void res.status(404).json({ error: "Client not found" });
     res.status(201).json(contact);
   } catch (error) { next(error); }
 });

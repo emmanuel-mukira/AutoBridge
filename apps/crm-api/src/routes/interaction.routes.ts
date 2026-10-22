@@ -1,14 +1,13 @@
 import { Router } from "express";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireCsrf, requireTrustedOrigin } from "../middleware/auth.js";
 import * as controller from "../controllers/interaction.controller.js";
 
 const router = Router();
-
-router.post("/", requireAuth(), controller.create);
-router.get("/", requireAuth(), controller.list);
-router.get("/:id", requireAuth(), controller.getById);
-router.patch("/:id", requireAuth(), controller.update);
-router.delete("/:id", requireAuth(), controller.deleteInteraction);
-router.get("/customer/:customerId", requireAuth(), controller.getByCustomer);
+router.use(requireAuth);
+router.get("/", controller.list);
+router.get("/:id", controller.getById);
+router.post("/", requireTrustedOrigin, requireCsrf, controller.create);
+router.patch("/:id", requireTrustedOrigin, requireCsrf, controller.update);
+router.delete("/:id", requireTrustedOrigin, requireCsrf, controller.remove);
 
 export default router;

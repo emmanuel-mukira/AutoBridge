@@ -4,9 +4,11 @@ import helmet from "helmet";
 import { httpLogger } from "./lib/logger.js";
 import cookieParser from "cookie-parser";
 import authRouter from "./routes/auth.routes.js";
-import accountRouter from "./routes/account.routes.js";
+import clientRouter from "./routes/client.routes.js";
 import contactRouter from "./routes/contact.routes.js";
 import opportunityRouter from "./routes/opportunity.routes.js";
+import interactionRouter from "./routes/interaction.routes.js";
+import followUpRouter from "./routes/followUp.routes.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -73,9 +75,11 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/api/auth", authRouter);
-app.use("/api/accounts", accountRouter);
+app.use("/api/clients", clientRouter);
 app.use("/api/contacts", contactRouter);
 app.use("/api/opportunities", opportunityRouter);
+app.use("/api/interactions", interactionRouter);
+app.use("/api/follow-ups", followUpRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

@@ -14,12 +14,12 @@ model User {
   createdAt    DateTime @default(now())
 
   sessions                 Session[]
-  ownedAccounts            Account[]               @relation("AccountOwner")
+  ownedClients             Client[]                @relation("ClientOwner")
   ownedOpportunities       Opportunity[]           @relation("OpportunityOwner")
   interactions             Interaction[]
   followUps                FollowUp[]
   predictionReviews        PredictionReview[]
-  verifiedRevenueSummaries AccountRevenueSummary[]
+  verifiedRevenueSummaries ClientRevenueSummary[]
 
   @@index([role])
 }

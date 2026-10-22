@@ -7,12 +7,15 @@ From `apps/crm-api`:
 ```bash
 npm run build
 npm run verify:foundation
+npm run verify:opportunities
+npm run verify:activities
 npm run seed:dev
 curl http://127.0.0.1:3000/health
 ```
 
 Run `seed:dev` only with `NODE_ENV=development` against the local automotive database. It
-uses the administrator credentials in the ignored API `.env` and adds three sample customers.
+uses the administrator credentials in the ignored API `.env` and adds six sample clients,
+contacts, open opportunities, interactions, follow-ups and the controlled product hierarchy.
 The command is safe to repeat and does not reset the database. Changing the
 credentials in `.env` before rerunning it updates the development administrator
 and revokes existing sessions.
@@ -22,8 +25,9 @@ and revokes existing sessions.
 When validating the CRM API, cover:
 
 - authenticated session resolution through the API session;
-- customer and contact ownership plus administrator access;
+- client, contact, opportunity and activity ownership plus administrator access;
 - login, logout, session expiry, and CSRF failure paths.
+- interaction/client/opportunity relationship validation;
+- follow-up rescheduling and idempotent completion.
 
-Opportunity, activity, and analytics workflows still need their own
-implementation and verification.
+Dashboard, analytics and ML scoring workflows remain later checkpoints.

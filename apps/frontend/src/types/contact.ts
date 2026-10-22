@@ -1,6 +1,6 @@
 export interface Contact {
   id: number;
-  accountId: number;
+  clientId: number;
   firstName: string;
   lastName: string;
   title: string | null;
@@ -12,7 +12,7 @@ export interface Contact {
 }
 
 export interface ContactInput {
-  accountId: number;
+  clientId: number;
   firstName: string;
   lastName: string;
   title?: string;
@@ -21,7 +21,7 @@ export interface ContactInput {
   isPrimary?: boolean;
 }
 
-export type ContactUpdate = Omit<Partial<ContactInput>, "accountId">;
+export type ContactUpdate = Omit<Partial<ContactInput>, "clientId">;
 
 export interface ContactsResponse {
   contacts: Contact[];

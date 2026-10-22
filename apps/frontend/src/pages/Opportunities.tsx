@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useUIStore } from "@/app/store";
 import { OpportunityDialog } from "@/features/opportunities/components/OpportunityDialog";
 import { OpportunityKanbanBoard } from "@/features/opportunities/components/OpportunityKanbanBoard";
@@ -11,7 +12,7 @@ import { useOpportunities, useTransitionOpportunity } from "@/features/opportuni
 import type { Opportunity, OpportunityOutcome, OpportunityStage, SalesRoute } from "@/features/opportunities/services/opportunitiesApi";
 import { BriefcaseBusiness, LayoutGrid, List, Plus, Search } from "lucide-react";
 
-const selectClass = "flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm";
+const all = "all";
 
 export default function Opportunities() {
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -49,9 +50,9 @@ export default function Opportunities() {
   return <section className="space-y-4">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="text-2xl font-bold">Opportunities</h1><p className="mt-1 text-sm text-muted-foreground">Track B2B automotive sales through each pipeline stage.</p></div><Button className="w-full sm:w-auto" onClick={() => { setEditingOpportunity(undefined); setDialogOpen(true); }}><Plus className="mr-2 h-4 w-4" />New opportunity</Button></div>
     <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-      <div className="relative w-full sm:max-w-xs"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" aria-label="Search opportunities" placeholder="Search title or account" value={search} onChange={(event) => setSearch(event.target.value)} /></div>
-      <select aria-label="Filter by stage" className={selectClass} value={stage} onChange={(event) => setStage(event.target.value as "" | OpportunityStage)}><option value="">All stages</option><option value="NEW">New</option><option value="QUALIFYING">Qualifying</option><option value="PROPOSAL">Proposal</option><option value="NEGOTIATION">Negotiation</option><option value="CLOSED">Closed</option></select>
-      <select aria-label="Filter by sales route" className={selectClass} value={route} onChange={(event) => setRoute(event.target.value as "" | SalesRoute)}><option value="">All routes</option><option value="FIELDS_SALES">Field sales</option><option value="RESELLER">Reseller</option><option value="TELECOVERAGE">Telecoverage</option><option value="TELESALES">Telesales</option><option value="OTHER">Other</option></select>
+      <div className="relative w-full sm:max-w-xs"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" aria-label="Search opportunities" placeholder="Search opportunity title" value={search} onChange={(event) => setSearch(event.target.value)} /></div>
+      <Select value={stage || all} onValueChange={(value) => setStage(value === all ? "" : value as OpportunityStage)}><SelectTrigger className="w-full sm:w-40" aria-label="Filter by stage"><SelectValue /></SelectTrigger><SelectContent><SelectItem value={all}>All stages</SelectItem><SelectItem value="NEW">New</SelectItem><SelectItem value="QUALIFYING">Qualifying</SelectItem><SelectItem value="PROPOSAL">Proposal</SelectItem><SelectItem value="NEGOTIATION">Negotiation</SelectItem><SelectItem value="CLOSED">Closed</SelectItem></SelectContent></Select>
+      <Select value={route || all} onValueChange={(value) => setRoute(value === all ? "" : value as SalesRoute)}><SelectTrigger className="w-full sm:w-44" aria-label="Filter by sales route"><SelectValue /></SelectTrigger><SelectContent><SelectItem value={all}>All routes</SelectItem><SelectItem value="FIELDS_SALES">Field sales</SelectItem><SelectItem value="RESELLER">Reseller</SelectItem><SelectItem value="TELECOVERAGE">Telecoverage</SelectItem><SelectItem value="TELESALES">Telesales</SelectItem><SelectItem value="OTHER">Other</SelectItem></SelectContent></Select>
     </div>
     {isLoading && <p className="text-muted-foreground">Loading opportunities...</p>}
     {error && <p role="alert" className="text-destructive">Unable to load opportunities. Please try again.</p>}

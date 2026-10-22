@@ -15,6 +15,7 @@
     "seed:dev": "tsx prisma/automotive/seed.ts",
     "verify:foundation": "node scripts/verify-foundation.mjs",
     "verify:opportunities": "node scripts/verify-opportunities.mjs",
+    "verify:activities": "node scripts/verify-activities.mjs",
     "verify:currency": "node --experimental-strip-types scripts/verify-currency.ts"
   },
   "keywords": [],

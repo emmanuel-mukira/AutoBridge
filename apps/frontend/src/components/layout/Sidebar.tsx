@@ -4,7 +4,9 @@ import {
   ChevronsLeft, 
   ChevronsRight,
   Building2,
-  BriefcaseBusiness
+  BriefcaseBusiness,
+  CalendarClock,
+  MessagesSquare
 } from "lucide-react";
 import { useAuth } from "@/app/auth/useAuth";
 import { Button } from "@/components/ui/button";
@@ -17,8 +19,10 @@ type SidebarLinksProps = {
 
 export const SidebarLinks = memo(function SidebarLinks({ collapsed = false }: SidebarLinksProps) {
   const regularLinks = [
-    { to: "/dashboard/accounts", label: "Accounts", icon: Building2 },
+    { to: "/dashboard/clients", label: "Clients", icon: Building2 },
     { to: "/dashboard/opportunities", label: "Opportunities", icon: BriefcaseBusiness },
+    { to: "/dashboard/interactions", label: "Interactions", icon: MessagesSquare },
+    { to: "/dashboard/follow-ups", label: "Follow-ups", icon: CalendarClock },
   ];
 
   return (

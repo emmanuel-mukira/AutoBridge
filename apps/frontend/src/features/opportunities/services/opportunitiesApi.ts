@@ -7,7 +7,7 @@ export type OpportunityOutcome = "WON" | "LOST";
 
 export interface Opportunity {
   id: number;
-  accountId: number;
+  clientId: number;
   ownerId: number;
   productSubgroupId: number | null;
   title: string;
@@ -21,13 +21,13 @@ export interface Opportunity {
   estimatedAt: string;
   createdAt: string;
   updatedAt: string;
-  account: { id: number; businessName: string };
+  client: { id: number; businessName: string };
   owner: { id: number; firstName: string; lastName: string; email: string; role: "ADMIN" | "SALES_REP" };
   productSubgroup: { id: number; name: string; productGroup: { id: number; name: string } } | null;
 }
 
 export interface OpportunityInput {
-  accountId: number;
+  clientId: number;
   ownerId?: number;
   productSubgroupId?: number | null;
   title: string;
@@ -40,7 +40,7 @@ export interface OpportunityInput {
 export interface OpportunityFilters {
   search?: string;
   stage?: OpportunityStage;
-  accountId?: number;
+  clientId?: number;
   ownerId?: number;
   productGroupId?: number;
   productSubgroupId?: number;

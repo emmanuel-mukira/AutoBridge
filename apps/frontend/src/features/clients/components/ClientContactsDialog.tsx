@@ -34,26 +34,26 @@ import {
 import { Plus, MoreVertical, Pencil, Trash2, Mail, Phone } from "lucide-react";
 import { useContacts, useDeleteContact } from "../hooks/useContacts";
 import { ContactDialog } from "./ContactDialog";
-import type { Account } from "../services/accountsApi";
+import type { Client } from "../services/clientsApi";
 import type { Contact } from "@/types/contact";
 
-interface AccountContactsDialogProps {
+interface ClientContactsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  account: Account | null;
+  client: Client | null;
 }
 
-export function AccountContactsDialog({
+export function ClientContactsDialog({
   open,
   onOpenChange,
-  account,
-}: AccountContactsDialogProps) {
+  client,
+}: ClientContactsDialogProps) {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [deletingContact, setDeletingContact] = useState<Contact | null>(null);
 
-  const { data: contactsData, isLoading, error } = useContacts(account?.id);
-  const deleteContactMutation = useDeleteContact(account?.id ?? 0);
+  const { data: contactsData, isLoading, error } = useContacts(client?.id);
+  const deleteContactMutation = useDeleteContact(client?.id ?? 0);
 
   const handleDelete = async () => {
     if (!deletingContact) return;
@@ -79,7 +79,7 @@ export function AccountContactsDialog({
     onOpenChange(nextOpen);
   };
 
-  if (!account) return null;
+  if (!client) return null;
 
   const contacts = contactsData?.contacts || [];
 
@@ -88,9 +88,9 @@ export function AccountContactsDialog({
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="sm:max-w-[800px] max-h-[90vh] flex flex-col">
           <DialogHeader className="flex-shrink-0">
-            <DialogTitle>Account contacts</DialogTitle>
+            <DialogTitle>Client contacts</DialogTitle>
             <DialogDescription>
-              Manage contacts for {account.businessName}
+              Manage contacts for {client.businessName}
             </DialogDescription>
           </DialogHeader>
 
@@ -204,8 +204,8 @@ export function AccountContactsDialog({
             setEditingContact(null);
           }
         }}
-        accountId={account.id}
-        accountName={account.businessName}
+        clientId={client.id}
+        clientName={client.businessName}
         contact={editingContact}
       />
 

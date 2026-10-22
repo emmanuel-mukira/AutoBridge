@@ -1,28 +1,28 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../client.js";
-import type { AccountActor } from "./accountService.js";
+import type { ClientActor } from "./clientService.js";
 import type { CreateOpportunityInput, ListOpportunitiesInput, TransitionOpportunityInput, UpdateOpportunityInput } from "../schemas/opportunity.schemas.js";
 
 const stages = ["NEW", "QUALIFYING", "PROPOSAL", "NEGOTIATION", "CLOSED"] as const;
 
 const include = {
-  account: { select: { id: true, businessName: true } },
+  client: { select: { id: true, businessName: true } },
   owner: { select: { id: true, firstName: true, lastName: true, email: true, role: true } },
   productSubgroup: { include: { productGroup: true } },
 } as const;
 
-function access(actor: AccountActor): Prisma.OpportunityWhereInput {
+function access(actor: ClientActor): Prisma.OpportunityWhereInput {
   return {
-    account: { deletedAt: null },
+    client: { deletedAt: null },
     ...(actor.role === "SALES_REP" ? { ownerId: actor.id } : {}),
   };
 }
 
 export class OpportunityService {
-  private async validateReferences(actor: AccountActor, accountId: number, ownerId: number, productSubgroupId?: number | null) {
-    const [account, owner, productSubgroup] = await Promise.all([
-      prisma.account.findFirst({
-        where: { id: accountId, deletedAt: null, ...(actor.role === "SALES_REP" ? { ownerId: actor.id } : {}) },
+  private async validateReferences(actor: ClientActor, clientId: number, ownerId: number, productSubgroupId?: number | null) {
+    const [client, owner, productSubgroup] = await Promise.all([
+      prisma.client.findFirst({
+        where: { id: clientId, deletedAt: null, ...(actor.role === "SALES_REP" ? { ownerId: actor.id } : {}) },
         select: { id: true, ownerId: true },
       }),
       prisma.user.findFirst({ where: { id: ownerId, active: true }, select: { id: true } }),
@@ -30,18 +30,18 @@ export class OpportunityService {
         ? prisma.productSubgroup.findUnique({ where: { id: productSubgroupId }, select: { id: true } })
         : Promise.resolve({ id: 0 }),
     ]);
-    if (!account) throw new Error("ACCOUNT_NOT_FOUND");
+    if (!client) throw new Error("CLIENT_NOT_FOUND");
     if (!owner) throw new Error("OWNER_NOT_FOUND");
-    if (account.ownerId !== ownerId) throw new Error("ACCOUNT_OWNER_MISMATCH");
+    if (client.ownerId !== ownerId) throw new Error("CLIENT_OWNER_MISMATCH");
     if (!productSubgroup) throw new Error("PRODUCT_SUBGROUP_NOT_FOUND");
   }
 
-  async create(actor: AccountActor, input: CreateOpportunityInput) {
+  async create(actor: ClientActor, input: CreateOpportunityInput) {
     const ownerId = actor.role === "ADMIN" ? input.ownerId ?? actor.id : actor.id;
-    await this.validateReferences(actor, input.accountId, ownerId, input.productSubgroupId);
+    await this.validateReferences(actor, input.clientId, ownerId, input.productSubgroupId);
     return prisma.opportunity.create({
       data: {
-        accountId: input.accountId,
+        clientId: input.clientId,
         ownerId,
         productSubgroupId: input.productSubgroupId ?? null,
         title: input.title.trim(),
@@ -54,11 +54,11 @@ export class OpportunityService {
     });
   }
 
-  async list(actor: AccountActor, filters: ListOpportunitiesInput) {
+  async list(actor: ClientActor, filters: ListOpportunitiesInput) {
     const where: Prisma.OpportunityWhereInput = {
       ...access(actor),
       ...(filters.search ? { title: { contains: filters.search, mode: "insensitive" } } : {}),
-      ...(filters.accountId ? { accountId: filters.accountId } : {}),
+      ...(filters.clientId ? { clientId: filters.clientId } : {}),
       ...(filters.ownerId && actor.role === "ADMIN" ? { ownerId: filters.ownerId } : {}),
       ...(filters.productSubgroupId ? { productSubgroupId: filters.productSubgroupId } : {}),
       ...(filters.productGroupId ? { productSubgroup: { productGroupId: filters.productGroupId } } : {}),
@@ -78,21 +78,21 @@ export class OpportunityService {
     return { opportunities, pagination: { page: filters.page, limit: filters.limit, total, totalPages: Math.ceil(total / filters.limit) } };
   }
 
-  async getById(actor: AccountActor, id: number) {
+  async getById(actor: ClientActor, id: number) {
     return prisma.opportunity.findFirst({ where: { ...access(actor), id }, include });
   }
 
-  async update(actor: AccountActor, id: number, input: UpdateOpportunityInput) {
+  async update(actor: ClientActor, id: number, input: UpdateOpportunityInput) {
     const current = await this.getById(actor, id);
     if (!current) return null;
-    const accountId = input.accountId ?? current.accountId;
+    const clientId = input.clientId ?? current.clientId;
     const ownerId = actor.role === "ADMIN" ? input.ownerId ?? current.ownerId : actor.id;
     const productSubgroupId = input.productSubgroupId === undefined ? current.productSubgroupId : input.productSubgroupId;
-    await this.validateReferences(actor, accountId, ownerId, productSubgroupId);
+    await this.validateReferences(actor, clientId, ownerId, productSubgroupId);
     return prisma.opportunity.update({
       where: { id },
       data: {
-        ...(input.accountId !== undefined ? { accountId } : {}),
+        ...(input.clientId !== undefined ? { clientId } : {}),
         ...(input.ownerId !== undefined && actor.role === "ADMIN" ? { ownerId } : {}),
         ...(input.productSubgroupId !== undefined ? { productSubgroupId } : {}),
         ...(input.title !== undefined ? { title: input.title.trim() } : {}),
@@ -105,7 +105,7 @@ export class OpportunityService {
     });
   }
 
-  async transition(actor: AccountActor, id: number, input: TransitionOpportunityInput) {
+  async transition(actor: ClientActor, id: number, input: TransitionOpportunityInput) {
     const current = await this.getById(actor, id);
     if (!current) return null;
     if (stages.indexOf(input.stage) <= stages.indexOf(current.stage)) throw new Error("INVALID_STAGE_TRANSITION");
@@ -126,7 +126,7 @@ export class OpportunityService {
     return prisma.productGroup.findMany({ include: { subgroups: { orderBy: { name: "asc" } } }, orderBy: { name: "asc" } });
   }
 
-  async listOwners(actor: AccountActor) {
+  async listOwners(actor: ClientActor) {
     return prisma.user.findMany({
       where: { active: true, ...(actor.role === "SALES_REP" ? { id: actor.id } : {}) },
       select: { id: true, firstName: true, lastName: true, email: true, role: true },

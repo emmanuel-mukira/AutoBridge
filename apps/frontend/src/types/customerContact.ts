@@ -1,6 +1,6 @@
 export interface CustomerContact {
   id: number;
-  accountId: number;
+  clientId: number;
   firstName: string;
   lastName: string;
   title?: string;
@@ -12,7 +12,7 @@ export interface CustomerContact {
 }
 
 export interface CreateCustomerContactInput {
-  accountId: number;
+  clientId: number;
   firstName: string;
   lastName: string;
   title?: string;
@@ -31,7 +31,7 @@ export interface UpdateCustomerContactInput {
 }
 
 export interface ListCustomerContactsParams {
-  accountId?: number;
+  clientId?: number;
   page?: number;
   limit?: number;
 }

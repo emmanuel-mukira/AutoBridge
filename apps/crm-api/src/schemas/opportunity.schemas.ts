@@ -6,7 +6,7 @@ const MoneySchema = z.union([z.string(), z.number()]).transform(String).pipe(
 const NullableIdSchema = z.number().int().positive().nullable().optional();
 
 export const CreateOpportunitySchema = z.object({
-  accountId: z.number().int().positive(),
+  clientId: z.number().int().positive(),
   ownerId: z.number().int().positive().optional(),
   productSubgroupId: NullableIdSchema,
   title: z.string().trim().min(1).max(200),
@@ -28,7 +28,7 @@ export const TransitionOpportunitySchema = z.object({
 
 export const ListOpportunitiesSchema = z.object({
   search: z.string().trim().optional(),
-  accountId: z.coerce.number().int().positive().optional(),
+  clientId: z.coerce.number().int().positive().optional(),
   ownerId: z.coerce.number().int().positive().optional(),
   productGroupId: z.coerce.number().int().positive().optional(),
   productSubgroupId: z.coerce.number().int().positive().optional(),

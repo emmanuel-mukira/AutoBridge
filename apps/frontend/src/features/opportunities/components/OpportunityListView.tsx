@@ -10,10 +10,10 @@ import { ArrowRight, Pencil } from "lucide-react";
 export function OpportunityListView({ opportunities, displayCurrency, onEdit, onChangeStage }: { opportunities: Opportunity[]; displayCurrency: DisplayCurrency; onEdit: (opportunity: Opportunity) => void; onChangeStage: (opportunity: Opportunity) => void }) {
   return <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
     <Table>
-      <TableHeader><TableRow><TableHead>Opportunity</TableHead><TableHead>Account</TableHead><TableHead>Amount</TableHead><TableHead>Stage</TableHead><TableHead>Owner</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
+      <TableHeader><TableRow><TableHead>Opportunity</TableHead><TableHead>Client</TableHead><TableHead>Amount</TableHead><TableHead>Stage</TableHead><TableHead>Owner</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
       <TableBody>{opportunities.map((opportunity) => <TableRow key={opportunity.id}>
         <TableCell className="font-medium"><Link className="text-primary hover:underline" to={`/dashboard/opportunities/${opportunity.id}`}>{opportunity.title}</Link></TableCell>
-        <TableCell>{opportunity.account.businessName}</TableCell>
+        <TableCell>{opportunity.client.businessName}</TableCell>
         <TableCell>{formatMoney(Number(opportunity.estimatedAmount), opportunity.currency, displayCurrency)}</TableCell>
         <TableCell><div className="flex flex-wrap gap-1"><Badge className={opportunityStageClass[opportunity.stage]} variant="outline">{opportunityStageLabels[opportunity.stage]}</Badge>{opportunity.outcome && <Badge variant={opportunity.outcome === "WON" ? "default" : "destructive"}>{opportunity.outcome === "WON" ? "Won" : "Lost"}</Badge>}</div></TableCell>
         <TableCell>{opportunity.owner.firstName} {opportunity.owner.lastName}</TableCell>

@@ -6,7 +6,7 @@ import { prisma } from "../dist/src/client.js";
 const base = `http://127.0.0.1:${process.env.PORT || 3000}`;
 const origin = process.env.FRONTEND_ORIGIN?.split(",")[0] || "http://127.0.0.1:5173";
 const suffix = randomUUID();
-const created = { opportunities: [], accounts: [], users: [] };
+const created = { opportunities: [], clients: [], users: [] };
 
 async function request(path, method = "GET", body, session) {
   const response = await fetch(`${base}${path}`, {
@@ -33,14 +33,14 @@ async function signIn(email, password) {
 }
 
 async function removeInterruptedVerificationRows() {
-  const accounts = await prisma.account.findMany({
-    where: { OR: [{ businessName: { startsWith: "Opportunity Account " } }, { businessName: { startsWith: "Admin Account " } }] },
+  const clients = await prisma.client.findMany({
+    where: { OR: [{ businessName: { startsWith: "Opportunity Client " } }, { businessName: { startsWith: "Admin Client " } }] },
     select: { id: true },
   });
-  const accountIds = accounts.map((account) => account.id);
-  if (accountIds.length) {
-    await prisma.opportunity.deleteMany({ where: { accountId: { in: accountIds } } });
-    await prisma.account.deleteMany({ where: { id: { in: accountIds } } });
+  const clientIds = clients.map((client) => client.id);
+  if (clientIds.length) {
+    await prisma.opportunity.deleteMany({ where: { clientId: { in: clientIds } } });
+    await prisma.client.deleteMany({ where: { id: { in: clientIds } } });
   }
   await prisma.user.deleteMany({ where: { email: { startsWith: "opportunity-rep-", endsWith: "@example.test" } } });
 }
@@ -68,16 +68,16 @@ try {
   created.users.push(repUser.data.user.id);
   const rep = await signIn(repEmail, repPassword);
 
-  const repAccount = await request("/api/accounts", "POST", { businessName: `Opportunity Account ${suffix}`, countyName: "Nairobi", locationAddress: "Test Avenue" }, rep);
-  assert.equal(repAccount.response.status, 201);
-  created.accounts.push(repAccount.data.id);
+  const repClient = await request("/api/clients", "POST", { businessName: `Opportunity Client ${suffix}`, countyName: "Nairobi", locationAddress: "Test Avenue" }, rep);
+  assert.equal(repClient.response.status, 201);
+  created.clients.push(repClient.data.id);
 
-  const adminAccount = await request("/api/accounts", "POST", { businessName: `Admin Account ${suffix}`, countyName: "Nairobi", locationAddress: "Admin Avenue" }, admin);
-  assert.equal(adminAccount.response.status, 201);
-  created.accounts.push(adminAccount.data.id);
+  const adminClient = await request("/api/clients", "POST", { businessName: `Admin Client ${suffix}`, countyName: "Nairobi", locationAddress: "Admin Avenue" }, admin);
+  assert.equal(adminClient.response.status, 201);
+  created.clients.push(adminClient.data.id);
 
   const validInput = {
-    accountId: repAccount.data.id,
+    clientId: repClient.data.id,
     ownerId: rep.user.id,
     productSubgroupId: subgroup.id,
     title: `Fleet parts renewal ${suffix}`,
@@ -90,18 +90,18 @@ try {
   const noCsrf = await fetch(`${base}/api/opportunities`, { method: "POST", headers: { Cookie: rep.cookie, Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify(validInput) });
   assert.equal(noCsrf.status, 403);
   assert.equal((await request("/api/opportunities", "POST", { ...validInput, estimatedAmount: "12.345" }, rep)).response.status, 400);
-  assert.equal((await request("/api/opportunities", "POST", { ...validInput, accountId: 2_147_483_647 }, rep)).response.status, 400);
+  assert.equal((await request("/api/opportunities", "POST", { ...validInput, clientId: 2_147_483_647 }, rep)).response.status, 400);
   assert.equal((await request("/api/opportunities", "POST", { ...validInput, productSubgroupId: 2_147_483_647 }, rep)).response.status, 400);
   assert.equal((await request("/api/opportunities", "POST", { ...validInput, ownerId: admin.user.id }, rep)).response.status, 403);
-  assert.equal((await request("/api/opportunities", "POST", { ...validInput, accountId: adminAccount.data.id, ownerId: rep.user.id }, admin)).response.status, 400);
+  assert.equal((await request("/api/opportunities", "POST", { ...validInput, clientId: adminClient.data.id, ownerId: rep.user.id }, admin)).response.status, 400);
 
   const createdOpportunity = await request("/api/opportunities", "POST", validInput, rep);
   assert.equal(createdOpportunity.response.status, 201);
   created.opportunities.push(createdOpportunity.data.id);
   assert.equal(createdOpportunity.data.stage, "NEW");
-  assert.equal(createdOpportunity.data.account.id, repAccount.data.id);
+  assert.equal(createdOpportunity.data.client.id, repClient.data.id);
   assert.equal(createdOpportunity.data.productSubgroup.id, subgroup.id);
-  assert.equal((await request(`/api/accounts/${repAccount.data.id}`, "PATCH", { ownerId: admin.user.id }, admin)).response.status, 409);
+  assert.equal((await request(`/api/clients/${repClient.data.id}`, "PATCH", { ownerId: admin.user.id }, admin)).response.status, 409);
 
   const stored = await prisma.opportunity.findUnique({ where: { id: createdOpportunity.data.id } });
   assert.equal(stored?.estimatedAmount.toFixed(2), "250000.00");
@@ -110,6 +110,7 @@ try {
   const bySearch = await request(`/api/opportunities?search=${encodeURIComponent(suffix)}&stage=NEW`, "GET", undefined, rep);
   assert.equal(bySearch.response.status, 200);
   assert.equal(bySearch.data.opportunities.length, 1);
+  assert.deepEqual((await request(`/api/opportunities?clientId=${repClient.data.id}`, "GET", undefined, rep)).data.opportunities.map((item) => item.id), [createdOpportunity.data.id]);
   assert.equal((await request(`/api/opportunities/${createdOpportunity.data.id}`, "GET", undefined, rep)).response.status, 200);
   assert.equal((await request(`/api/opportunities/${createdOpportunity.data.id}`, "PATCH", { title: "Updated fleet renewal", estimatedAmount: "300000.00" }, rep)).data.title, "Updated fleet renewal");
   const stageWithoutCsrf = await fetch(`${base}/api/opportunities/${createdOpportunity.data.id}/stage`, { method: "PATCH", headers: { Cookie: rep.cookie, Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ stage: "PROPOSAL" }) });
@@ -124,7 +125,7 @@ try {
   assert.equal((await request(`/api/opportunities/${createdOpportunity.data.id}/stage`, "PATCH", { stage: "NEW" }, rep)).response.status, 409);
 
   const adminOpportunity = await request("/api/opportunities", "POST", {
-    accountId: adminAccount.data.id,
+    clientId: adminClient.data.id,
     ownerId: admin.user.id,
     title: `Admin private ${suffix}`,
     estimatedAmount: "1000",
@@ -140,7 +141,7 @@ try {
   console.log("PASS: routes, validation, CSRF, ownership, reassignment guard, opportunity CRUD, forward stages, closure and persistence");
 } finally {
   await prisma.opportunity.deleteMany({ where: { id: { in: created.opportunities } } });
-  await prisma.account.deleteMany({ where: { id: { in: created.accounts } } });
+  await prisma.client.deleteMany({ where: { id: { in: created.clients } } });
   await prisma.user.deleteMany({ where: { id: { in: created.users } } });
   await prisma.$disconnect();
 }

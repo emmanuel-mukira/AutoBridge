@@ -1,6 +1,6 @@
 model Interaction {
   id              Int      @id @default(autoincrement())
-  accountId       Int
+  clientId        Int
   opportunityId   Int?
   userId          Int
   interactionType String
@@ -8,24 +8,25 @@ model Interaction {
   occurredAt      DateTime
   createdAt       DateTime @default(now())
 
-  account     Account      @relation(fields: [accountId], references: [id])
+  client      Client       @relation(fields: [clientId], references: [id])
   opportunity Opportunity? @relation(fields: [opportunityId], references: [id])
   user        User         @relation(fields: [userId], references: [id])
 
-  @@index([accountId, occurredAt])
+  @@index([clientId, occurredAt])
 }
 
 model FollowUp {
   id            Int       @id @default(autoincrement())
-  accountId     Int
+  clientId      Int
   opportunityId Int?
   ownerId       Int
   title         String
+  channel       String?
   dueAt         DateTime
   completedAt   DateTime?
   createdAt     DateTime  @default(now())
 
-  account     Account      @relation(fields: [accountId], references: [id])
+  client      Client       @relation(fields: [clientId], references: [id])
   opportunity Opportunity? @relation(fields: [opportunityId], references: [id])
   owner       User         @relation(fields: [ownerId], references: [id])
 

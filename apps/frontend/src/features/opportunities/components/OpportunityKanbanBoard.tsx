@@ -60,7 +60,7 @@ export function OpportunityKanbanBoard({ opportunities, displayCurrency, onEdit,
               <div className="space-y-3">
                 <div className="space-y-1">
                   <Link className="font-semibold text-foreground hover:text-primary hover:underline" onPointerDown={(event) => event.stopPropagation()} to={`/dashboard/opportunities/${opportunity.opportunityId}`}>{opportunity.title}</Link>
-                  <p className="text-xs text-muted-foreground">{opportunity.account.businessName}</p>
+                  <p className="text-xs text-muted-foreground">{opportunity.client.businessName}</p>
                 </div>
                 <div className="flex flex-wrap gap-1"><Badge className={opportunityStageClass[opportunity.stage]} variant="outline">{opportunityStageLabels[opportunity.stage]}</Badge>{opportunity.outcome && <Badge variant={opportunity.outcome === "WON" ? "default" : "destructive"}>{opportunity.outcome === "WON" ? "Won" : "Lost"}</Badge>}</div>
                 <p className="text-sm font-semibold">{formatMoney(Number(opportunity.estimatedAmount), opportunity.currency, displayCurrency)}</p>

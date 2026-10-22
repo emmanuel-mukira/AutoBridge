@@ -1,158 +1,27 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
+import { MessageSquarePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Plus, Filter, X } from "lucide-react";
-import { useInteractions } from "@/features/interactions/hooks/useInteractions";
-import { CreateInteractionWizard } from "@/features/interactions/components/CreateInteractionWizard";
-import { EditInteractionDialog } from "@/features/interactions/components/EditInteractionDialog";
-import { InteractionDetailDialog } from "@/features/interactions/components/InteractionDetailDialog";
-import { InteractionList } from "@/features/interactions/components/InteractionList";
-import { InteractionFilters } from "@/features/interactions/components/InteractionFilters";
-import type { ListInteractionsParams, InteractionType } from "@/features/interactions/types";
-import { Badge } from "@/components/ui/badge";
-import { useFilterStore } from "@/stores/useFilterStore";
-import { FilterBadge } from "@/components/shared/FilterBadge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { InteractionDialog } from "@/features/activities/components/ActivityDialogs";
+import { InteractionTimeline } from "@/features/activities/components/InteractionTimeline";
+import { InteractionTable } from "@/features/activities/components/InteractionTable";
+import { useInteractions } from "@/features/activities/hooks/useActivities";
+import type { Interaction, InteractionType } from "@/features/activities/services/activitiesApi";
+import { useAuth } from "@/app/auth/useAuth";
+import { useOpportunityOwners } from "@/features/opportunities/hooks/useOpportunities";
 
-const FILTER_KEY = "interactions";
+const all = "all";
 
 export default function Interactions() {
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-  const [selectedInteractionId, setSelectedInteractionId] = useState<number | null>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
-
-  const { filters: storedFilters } = useFilterStore();
-  const activeFilters = useMemo(() => storedFilters[FILTER_KEY] || [], [storedFilters]);
-
-  const backendFilters = useMemo<ListInteractionsParams>(() => {
-    const params: ListInteractionsParams = {};
-    activeFilters.forEach((filter) => {
-      if (filter.field === "type") params.type = filter.value as InteractionType;
-      if (filter.field === "salesRepId") params.salesRepId = Number(filter.value);
-      if (filter.field === "customerId") params.customerId = Number(filter.value);
-      if (filter.field === "startDate") params.startDate = filter.value as string;
-      if (filter.field === "endDate") params.endDate = filter.value as string;
-    });
-    return params;
-  }, [activeFilters]);
-
-  const { data, isLoading } = useInteractions(backendFilters);
-
-  const handleEdit = (id: number) => {
-    setSelectedInteractionId(id);
-    setIsEditDialogOpen(true);
-  };
-
-  const handleViewDetails = (id: number) => {
-    setSelectedInteractionId(id);
-    setIsDetailDialogOpen(true);
-  };
-
-  const getFilterLabel = (field: string) => {
-    const labelMap: Record<string, string> = {
-      type: "Interaction Type",
-      salesRepId: "Sales Rep",
-      customerId: "Customer",
-      startDate: "Start Date",
-      endDate: "End Date",
-    };
-    return labelMap[field] || field;
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Interactions</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Track customer communications and touchpoints
-          </p>
-        </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Button
-            variant="outline"
-            onClick={() => setIsFilterModalOpen(true)}
-            className="relative"
-          >
-            <Filter className="h-4 w-4 mr-2" />
-            Filters
-            {activeFilters.length > 0 && (
-              <Badge
-                variant="default"
-                className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center p-0 text-[10px]"
-              >
-                {activeFilters.length}
-              </Badge>
-            )}
-          </Button>
-          <Button onClick={() => setIsCreateDialogOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Interaction
-          </Button>
-        </div>
-      </div>
-
-      {activeFilters.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm text-muted-foreground">Active filters:</span>
-          {activeFilters.map((filter) => (
-            <FilterBadge
-              key={filter.field}
-              condition={filter}
-              label={getFilterLabel(filter.field)}
-              onRemove={() => {
-                const { removeFilter } = useFilterStore.getState();
-                removeFilter(FILTER_KEY, filter.field);
-              }}
-            />
-          ))}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              const { clearFilters } = useFilterStore.getState();
-              clearFilters(FILTER_KEY);
-            }}
-            className="h-7 text-xs"
-          >
-            <X className="h-3 w-3 mr-1" />
-            Clear all
-          </Button>
-        </div>
-      )}
-
-      <InteractionFilters
-        open={isFilterModalOpen}
-        onOpenChange={setIsFilterModalOpen}
-        filterKey={FILTER_KEY}
-      />
-
-      <InteractionList
-        interactions={data?.interactions || []}
-        isLoading={isLoading}
-        onEdit={handleEdit}
-        onViewDetails={handleViewDetails}
-      />
-
-      <CreateInteractionWizard
-        open={isCreateDialogOpen}
-        onOpenChange={setIsCreateDialogOpen}
-      />
-      
-      {selectedInteractionId && (
-        <>
-          <EditInteractionDialog
-            interactionId={selectedInteractionId}
-            open={isEditDialogOpen}
-            onOpenChange={setIsEditDialogOpen}
-          />
-          <InteractionDetailDialog
-            interactionId={selectedInteractionId}
-            open={isDetailDialogOpen}
-            onOpenChange={setIsDetailDialogOpen}
-          />
-        </>
-      )}
-    </div>
-  );
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Interaction>();
+  const [interactionType, setInteractionType] = useState<InteractionType | "">("");
+  const [userId, setUserId] = useState("");
+  const { user } = useAuth();
+  const { data: owners } = useOpportunityOwners();
+  const query = useInteractions({ ...(interactionType ? { interactionType } : {}), ...(userId ? { userId: Number(userId) } : {}) });
+  const edit = (item: Interaction) => { setEditing(item); setDialogOpen(true); };
+  const interactions = query.data?.interactions ?? [];
+  return <section className="space-y-5"><header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="text-2xl font-bold">Interactions</h1><p className="mt-1 text-sm text-muted-foreground">Track calls, emails, meetings and client visits.</p></div><Button onClick={() => { setEditing(undefined); setDialogOpen(true); }}><MessageSquarePlus className="mr-2 h-4 w-4" />Record interaction</Button></header><div className="flex flex-col gap-2 sm:flex-row"><Select value={interactionType || all} onValueChange={(value) => setInteractionType(value === all ? "" : value as InteractionType)}><SelectTrigger className="w-full sm:w-56" aria-label="Interaction type"><SelectValue /></SelectTrigger><SelectContent><SelectItem value={all}>All interaction types</SelectItem><SelectItem value="CALL">Calls</SelectItem><SelectItem value="EMAIL">Emails</SelectItem><SelectItem value="MEETING">Meetings</SelectItem><SelectItem value="SITE_VISIT">Site visits</SelectItem><SelectItem value="FOLLOW_UP">Other follow-ups</SelectItem></SelectContent></Select>{user?.role === "ADMIN" && <Select value={userId || all} onValueChange={(value) => setUserId(value === all ? "" : value)}><SelectTrigger className="w-full sm:w-56" aria-label="Recorded by"><SelectValue /></SelectTrigger><SelectContent><SelectItem value={all}>All users</SelectItem>{owners?.map((owner) => <SelectItem key={owner.id} value={String(owner.id)}>{owner.firstName} {owner.lastName}</SelectItem>)}</SelectContent></Select>}</div>{query.error && <p role="alert" className="text-destructive">{query.error.message}</p>}<Tabs defaultValue="timeline"><TabsList><TabsTrigger value="timeline">Timeline</TabsTrigger><TabsTrigger value="table">Table</TabsTrigger></TabsList><TabsContent value="timeline" className="mt-5"><InteractionTimeline interactions={interactions} isLoading={query.isLoading} onEdit={edit} /></TabsContent><TabsContent value="table" className="mt-5"><InteractionTable interactions={interactions} isLoading={query.isLoading} onEdit={edit} /></TabsContent></Tabs><InteractionDialog open={dialogOpen} onOpenChange={setDialogOpen} interaction={editing} /></section>;
 }

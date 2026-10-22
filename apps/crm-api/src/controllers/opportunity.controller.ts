@@ -7,9 +7,9 @@ const service = new OpportunityService();
 function referenceError(error: unknown, res: Response): boolean {
   if (!(error instanceof Error)) return false;
   const messages: Record<string, string> = {
-    ACCOUNT_NOT_FOUND: "Account not found or access denied",
+    CLIENT_NOT_FOUND: "Client not found or access denied",
     OWNER_NOT_FOUND: "Owner not found",
-    ACCOUNT_OWNER_MISMATCH: "Opportunity owner must own the selected account",
+    CLIENT_OWNER_MISMATCH: "Opportunity owner must own the selected client",
     PRODUCT_SUBGROUP_NOT_FOUND: "Product subgroup not found",
   };
   if (!messages[error.message]) return false;

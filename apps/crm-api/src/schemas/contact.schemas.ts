@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const CreateContactSchema = z.object({
-  accountId: z.number().int().positive(),
+  clientId: z.number().int().positive(),
   firstName: z.string().trim().min(1, "First name is required"),
   lastName: z.string().trim().min(1, "Last name is required"),
   email: z.string().email().or(z.literal("")).optional().nullable(),
@@ -20,7 +20,7 @@ export const UpdateContactSchema = z.object({
 });
 
 export const ListContactsSchema = z.object({
-  accountId: z.coerce.number().int().positive().optional(),
+  clientId: z.coerce.number().int().positive().optional(),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
 });

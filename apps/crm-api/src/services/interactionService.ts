@@ -1,412 +1,91 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../client.js";
-import logger from "../lib/logger.js";
-import type {
-  CreateInteractionInput,
-  UpdateInteractionInput,
-  ListInteractionsInput,
-} from "../schemas/interaction.schemas.js";
+import type { ClientActor } from "./clientService.js";
+import type { CreateInteractionInput, ListInteractionsInput, UpdateInteractionInput } from "../schemas/interaction.schemas.js";
+
+const include = {
+  client: { select: { id: true, businessName: true } },
+  opportunity: { select: { id: true, title: true } },
+  user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } },
+} as const;
+
+function readAccess(actor: ClientActor): Prisma.InteractionWhereInput {
+  return { client: { deletedAt: null, ...(actor.role === "SALES_REP" ? { ownerId: actor.id } : {}) } };
+}
+
+function writeAccess(actor: ClientActor): Prisma.InteractionWhereInput {
+  return { ...readAccess(actor), ...(actor.role === "SALES_REP" ? { userId: actor.id } : {}) };
+}
 
 export class InteractionService {
-  async create(
-    data: CreateInteractionInput & { companyId: number; salesRepId: number },
-  ) {
-    const customer = await prisma.customer.findUnique({
-      where: { id: data.customerId, companyId: data.companyId },
+  private async validateReferences(actor: ClientActor, clientId: number, opportunityId?: number | null) {
+    const client = await prisma.client.findFirst({
+      where: { id: clientId, deletedAt: null, ...(actor.role === "SALES_REP" ? { ownerId: actor.id } : {}) },
+      select: { id: true },
     });
-
-    if (!customer) {
-      throw new Error("CUSTOMER_NOT_FOUND");
-    }
-
-    if (data.salesRepId) {
-      const salesRep = await prisma.user.findUnique({
-        where: { id: data.salesRepId, companyId: data.companyId },
+    if (!client) throw new Error("CLIENT_NOT_FOUND");
+    if (opportunityId) {
+      const opportunity = await prisma.opportunity.findFirst({
+        where: { id: opportunityId, clientId, ...(actor.role === "SALES_REP" ? { ownerId: actor.id } : {}) },
+        select: { id: true },
       });
-      if (!salesRep) {
-        throw new Error("SALES_REP_NOT_FOUND");
-      }
-    }
-
-    let contactId = data.contactId;
-
-    if (data.contact) {
-      const newContact = await prisma.customerContact.create({
-        data: {
-          customerId: data.customerId,
-          firstName: data.contact.firstName,
-          lastName: data.contact.lastName,
-          email: data.contact.email || null,
-          phone: data.contact.phone || null,
-          title: data.contact.title || null,
-          isPrimary: data.contact.isPrimary,
-        },
-      });
-      contactId = newContact.id;
-    } else if (data.contactId) {
-      const contact = await prisma.customerContact.findFirst({
-        where: {
-          id: data.contactId,
-          customerId: data.customerId,
-        },
-      });
-      if (!contact) {
-        throw new Error("CONTACT_NOT_FOUND_OR_MISMATCH");
-      }
-    }
-
-    if (data.leadId) {
-      const lead = await prisma.lead.findUnique({
-        where: { id: data.leadId, companyId: data.companyId },
-      });
-      if (!lead) {
-        throw new Error("LEAD_NOT_FOUND");
-      }
-    }
-
-    if (data.quotationId) {
-      const quotation = await prisma.quotation.findUnique({
-        where: { id: data.quotationId, companyId: data.companyId },
-      });
-      if (!quotation) {
-        throw new Error("QUOTATION_NOT_FOUND");
-      }
-    }
-
-    const interactionDate = data.interactionDate
-      ? new Date(data.interactionDate)
-      : new Date();
-    const oneMinuteAgo = new Date(interactionDate.getTime() - 1 * 60 * 1000);
-    const oneMinuteLater = new Date(interactionDate.getTime() + 1 * 60 * 1000);
-
-    const duplicateInteraction = await prisma.interaction.findFirst({
-      where: {
-        customerId: data.customerId,
-        salesRepId: data.salesRepId,
-        contactId: contactId || null,
-        type: data.type,
-        interactionDate: {
-          gte: oneMinuteAgo,
-          lte: oneMinuteLater,
-        },
-      },
-    });
-
-    if (duplicateInteraction) {
-      throw new Error("DUPLICATE_INTERACTION");
-    }
-
-    try {
-      return await prisma.interaction.create({
-        data: {
-          companyId: data.companyId,
-          customerId: data.customerId,
-          salesRepId: data.salesRepId,
-          contactId: contactId || null,
-          leadId: data.leadId || null,
-          quotationId: data.quotationId || null,
-          type: data.type,
-          interactionDate: data.interactionDate
-            ? new Date(data.interactionDate)
-            : new Date(),
-          notes: data.notes,
-        },
-        include: {
-          customer: {
-            select: {
-              id: true,
-              companyName: true,
-              countyName: true,
-              locationAddress: true,
-            },
-          },
-          salesRep: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-            },
-          },
-          contact: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              title: true,
-              email: true,
-              phone: true,
-            },
-          },
-        },
-      });
-    } catch (error) {
-      logger.error({ err: error }, "prisma error creating interaction");
-      throw error;
+      if (!opportunity) throw new Error("OPPORTUNITY_MISMATCH");
     }
   }
 
-  async list(filters: ListInteractionsInput & { companyId: number }) {
-    const {
-      page,
-      limit,
-      type,
-      salesRepId,
-      customerId,
-      contactId,
-      leadId,
-      quotationId,
-      startDate,
-      endDate,
-      companyId,
-    } = filters;
-    const skip = (page - 1) * limit;
+  async create(actor: ClientActor, input: CreateInteractionInput) {
+    await this.validateReferences(actor, input.clientId, input.opportunityId);
+    return prisma.interaction.create({
+      data: {
+        clientId: input.clientId,
+        opportunityId: input.opportunityId ?? null,
+        userId: actor.id,
+        interactionType: input.interactionType,
+        notes: input.notes || null,
+        occurredAt: new Date(input.occurredAt),
+      },
+      include,
+    });
+  }
 
-    const where: {
-      companyId: number;
-      type?: "CALL" | "EMAIL" | "MEETING" | "SITE_VISIT" | "FOLLOW_UP";
-      salesRepId?: number;
-      customerId?: number;
-      contactId?: number;
-      leadId?: number;
-      quotationId?: number;
-      interactionDate?: {
-        gte?: Date;
-        lte?: Date;
-      };
-    } = { companyId };
-
-    if (type) {
-      where.type = type as
-        | "CALL"
-        | "EMAIL"
-        | "MEETING"
-        | "SITE_VISIT"
-        | "FOLLOW_UP";
-    }
-
-    if (salesRepId) {
-      where.salesRepId = salesRepId;
-    }
-
-    if (customerId) {
-      where.customerId = customerId;
-    }
-
-    if (contactId) {
-      where.contactId = contactId;
-    }
-
-    if (leadId) {
-      where.leadId = leadId;
-    }
-
-    if (quotationId) {
-      where.quotationId = quotationId;
-    }
-
-    if (startDate || endDate) {
-      where.interactionDate = {};
-      if (startDate) {
-        where.interactionDate.gte = new Date(startDate);
-      }
-      if (endDate) {
-        where.interactionDate.lte = new Date(endDate);
-      }
-    }
-
-    const [interactions, total] = await Promise.all([
-      prisma.interaction.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { interactionDate: "desc" },
-        include: {
-          customer: {
-            select: {
-              id: true,
-              companyName: true,
-              countyName: true,
-              locationAddress: true,
-            },
-          },
-          salesRep: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-            },
-          },
-          contact: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              title: true,
-              email: true,
-              phone: true,
-            },
-          },
+  async list(actor: ClientActor, filters: ListInteractionsInput) {
+    const where: Prisma.InteractionWhereInput = {
+      ...readAccess(actor),
+      ...(filters.clientId ? { clientId: filters.clientId } : {}),
+      ...(filters.opportunityId ? { opportunityId: filters.opportunityId } : {}),
+      ...(filters.userId && actor.role === "ADMIN" ? { userId: filters.userId } : {}),
+      ...(filters.interactionType ? { interactionType: filters.interactionType } : {}),
+      ...(filters.startDate || filters.endDate ? {
+        occurredAt: {
+          ...(filters.startDate ? { gte: new Date(filters.startDate) } : {}),
+          ...(filters.endDate ? { lte: new Date(filters.endDate) } : {}),
         },
-      }),
+      } : {}),
+    };
+    const [interactions, total] = await prisma.$transaction([
+      prisma.interaction.findMany({ where, include, orderBy: [{ occurredAt: "desc" }, { id: "desc" }], skip: (filters.page - 1) * filters.limit, take: filters.limit }),
       prisma.interaction.count({ where }),
     ]);
-
-    return {
-      interactions,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
+    return { interactions, pagination: { page: filters.page, limit: filters.limit, total, totalPages: Math.ceil(total / filters.limit) } };
   }
 
-  async getById(id: number, companyId: number) {
-    const interaction = await prisma.interaction.findFirst({
-      where: { id, companyId },
-      include: {
-        customer: {
-          select: {
-            id: true,
-            companyName: true,
-            countyName: true,
-            locationAddress: true,
-          },
-        },
-        salesRep: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-        contact: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            title: true,
-            email: true,
-            phone: true,
-          },
-        },
-      },
-    });
-
-    if (!interaction) {
-      throw new Error("NOT_FOUND");
-    }
-
-    return interaction;
+  async getById(actor: ClientActor, id: number) {
+    return prisma.interaction.findFirst({ where: { ...readAccess(actor), id }, include });
   }
 
-  async update(
-    data: UpdateInteractionInput & { id: number; companyId: number },
-  ) {
-    const { id, companyId, contactId, interactionDate, notes } = data;
-
-    const existing = await this.getById(id, companyId);
-
-    if (contactId !== undefined && contactId !== null) {
-      const contact = await prisma.customerContact.findFirst({
-        where: {
-          id: contactId,
-          customerId: existing.customerId,
-        },
-      });
-      if (!contact) {
-        throw new Error("CONTACT_NOT_FOUND_OR_MISMATCH");
-      }
-    }
-
-    return prisma.interaction.update({
-      where: { id },
+  async update(actor: ClientActor, id: number, input: UpdateInteractionInput) {
+    const updated = await prisma.interaction.updateMany({
+      where: { ...writeAccess(actor), id },
       data: {
-        ...(contactId !== undefined && { contactId }),
-        ...(data.leadId !== undefined && { leadId: data.leadId }),
-        ...(data.quotationId !== undefined && {
-          quotationId: data.quotationId,
-        }),
-        ...(interactionDate && { interactionDate: new Date(interactionDate) }),
-        ...(notes && { notes }),
-      },
-      include: {
-        customer: {
-          select: {
-            id: true,
-            companyName: true,
-            countyName: true,
-            locationAddress: true,
-          },
-        },
-        salesRep: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-        contact: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            title: true,
-            email: true,
-            phone: true,
-          },
-        },
+        ...(input.interactionType !== undefined ? { interactionType: input.interactionType } : {}),
+        ...(input.notes !== undefined ? { notes: input.notes || null } : {}),
+        ...(input.occurredAt !== undefined ? { occurredAt: new Date(input.occurredAt) } : {}),
       },
     });
+    return updated.count ? this.getById(actor, id) : null;
   }
 
-  async delete(id: number, companyId: number) {
-    await this.getById(id, companyId);
-
-    await prisma.interaction.delete({
-      where: { id },
-    });
-  }
-
-  async getByCustomer(customerId: number, companyId: number) {
-    const customer = await prisma.customer.findFirst({
-      where: { id: customerId, companyId },
-    });
-
-    if (!customer) {
-      throw new Error("CUSTOMER_NOT_FOUND");
-    }
-
-    return prisma.interaction.findMany({
-      where: {
-        customerId,
-        companyId,
-      },
-      orderBy: { interactionDate: "desc" },
-      include: {
-        salesRep: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-        contact: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            title: true,
-            email: true,
-            phone: true,
-          },
-        },
-      },
-    });
+  async delete(actor: ClientActor, id: number) {
+    return (await prisma.interaction.deleteMany({ where: { ...writeAccess(actor), id } })).count > 0;
   }
 }

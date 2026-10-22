@@ -32,7 +32,7 @@ enum PredictionAssessment {
 
 model Opportunity {
   id                Int                 @id @default(autoincrement())
-  accountId         Int
+  clientId          Int
   ownerId           Int
   productSubgroupId Int?
   title             String
@@ -47,7 +47,7 @@ model Opportunity {
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 
-  account         Account                 @relation(fields: [accountId], references: [id])
+  client          Client                  @relation(fields: [clientId], references: [id])
   owner           User                    @relation("OpportunityOwner", fields: [ownerId], references: [id])
   productSubgroup ProductSubgroup?        @relation(fields: [productSubgroupId], references: [id])
   interactions    Interaction[]
@@ -55,7 +55,7 @@ model Opportunity {
   predictions     OpportunityPrediction[]
 
   @@index([stage, outcome])
-  @@index([accountId])
+  @@index([clientId])
 }
 
 model OpportunityPrediction {
@@ -72,7 +72,7 @@ model OpportunityPrediction {
   predictedAt        DateTime               @default(now())
 
   opportunity    Opportunity            @relation(fields: [opportunityId], references: [id])
-  revenueSummary AccountRevenueSummary? @relation(fields: [revenueSummaryId], references: [id], onDelete: Restrict)
+  revenueSummary ClientRevenueSummary? @relation(fields: [revenueSummaryId], references: [id], onDelete: Restrict)
   reviews        PredictionReview[]
 
   @@index([opportunityId, predictedAt])

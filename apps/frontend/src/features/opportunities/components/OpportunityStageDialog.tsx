@@ -2,11 +2,11 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Opportunity, OpportunityOutcome, OpportunityStage } from "../services/opportunitiesApi";
 import { opportunityStageLabels } from "../utils/labels";
 
 const stages = Object.keys(opportunityStageLabels) as OpportunityStage[];
-const selectClass = "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm";
 
 export function OpportunityStageDialog({ opportunity, initialStage, open, onOpenChange, onSubmit, pending, error }: {
   opportunity: Opportunity | null;
@@ -38,8 +38,8 @@ export function OpportunityStageDialog({ opportunity, initialStage, open, onOpen
     <DialogContent>
       <DialogHeader><DialogTitle>Change pipeline stage</DialogTitle><DialogDescription>{opportunity?.title}. Stages move forward only and cannot reopen after closure.</DialogDescription></DialogHeader>
       <form className="mt-4 space-y-4" onSubmit={submit}>
-        <div className="space-y-2"><Label htmlFor="nextStage">Next stage</Label><select id="nextStage" className={selectClass} value={stage} onChange={(event) => { setStage(event.target.value as OpportunityStage); setOutcome(""); }}>{availableStages.map((value) => <option key={value} value={value}>{opportunityStageLabels[value]}</option>)}</select></div>
-        {stage === "CLOSED" && <div className="space-y-2"><Label htmlFor="outcome">Outcome *</Label><select id="outcome" className={selectClass} value={outcome} onChange={(event) => setOutcome(event.target.value as OpportunityOutcome)} required><option value="">Select Won or Lost</option><option value="WON">Won</option><option value="LOST">Lost</option></select></div>}
+        <div className="space-y-2"><Label htmlFor="nextStage">Next stage</Label><Select value={stage} onValueChange={(value) => { setStage(value as OpportunityStage); setOutcome(""); }}><SelectTrigger id="nextStage"><SelectValue /></SelectTrigger><SelectContent>{availableStages.map((value) => <SelectItem key={value} value={value}>{opportunityStageLabels[value]}</SelectItem>)}</SelectContent></Select></div>
+        {stage === "CLOSED" && <div className="space-y-2"><Label htmlFor="outcome">Outcome *</Label><Select value={outcome} onValueChange={(value) => setOutcome(value as OpportunityOutcome)}><SelectTrigger id="outcome"><SelectValue placeholder="Select Won or Lost" /></SelectTrigger><SelectContent><SelectItem value="WON">Won</SelectItem><SelectItem value="LOST">Lost</SelectItem></SelectContent></Select></div>}
         {error && <p role="alert" className="text-sm text-destructive">{error.message}</p>}
         <div className="flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancel</Button><Button type="submit" disabled={pending || !stage || (stage === "CLOSED" && !outcome)}>{pending ? "Updating..." : "Change stage"}</Button></div>
       </form>

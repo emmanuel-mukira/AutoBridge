@@ -1,4 +1,4 @@
-model Account {
+model Client {
   id              Int       @id @default(autoincrement())
   businessName    String
   countyName      String
@@ -9,12 +9,12 @@ model Account {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  owner            User                    @relation("AccountOwner", fields: [ownerId], references: [id])
+  owner            User                    @relation("ClientOwner", fields: [ownerId], references: [id])
   contacts         Contact[]
   opportunities    Opportunity[]
   interactions     Interaction[]
   followUps        FollowUp[]
-  revenueSummaries AccountRevenueSummary[]
+  revenueSummaries ClientRevenueSummary[]
 
   @@index([businessName])
   @@index([ownerId, deletedAt])
@@ -22,7 +22,7 @@ model Account {
 
 model Contact {
   id        Int      @id @default(autoincrement())
-  accountId Int
+  clientId  Int
   firstName String
   lastName  String
   email     String?
@@ -32,14 +32,14 @@ model Contact {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
-  @@index([accountId])
+  @@index([clientId])
 }
 
-model AccountRevenueSummary {
+model ClientRevenueSummary {
   id             Int      @id @default(autoincrement())
-  accountId      Int
+  clientId       Int
   amount         Decimal  @db.Decimal(18, 2)
   currency       String   @db.VarChar(3)
   coverageStart  DateTime
@@ -49,9 +49,9 @@ model AccountRevenueSummary {
   verifiedById   Int?
   createdAt      DateTime @default(now())
 
-  account     Account                 @relation(fields: [accountId], references: [id])
+  client      Client                  @relation(fields: [clientId], references: [id])
   verifiedBy  User?                   @relation(fields: [verifiedById], references: [id])
   predictions OpportunityPrediction[]
 
-  @@index([accountId, coverageEnd])
+  @@index([clientId, coverageEnd])
 }

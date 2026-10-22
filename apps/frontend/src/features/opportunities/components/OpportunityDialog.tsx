@@ -1,17 +1,18 @@
 import { useEffect, useMemo } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DateInput } from "@/components/ui/date-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/app/auth/useAuth";
-import { useAccounts } from "@/features/customers/hooks/useAccounts";
+import { useClients } from "@/features/clients/hooks/useClients";
 import { useOpportunityProducts, useSaveOpportunity } from "../hooks/useOpportunities";
 import type { Currency, Opportunity, OpportunityInput, SalesRoute } from "../services/opportunitiesApi";
 
 type FormValues = {
-  accountId: string;
+  clientId: string;
   ownerId: string;
   productGroupId: string;
   productSubgroupId: string;
@@ -22,7 +23,7 @@ type FormValues = {
   estimatedCloseAt: string;
 };
 
-const selectClass = "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm";
+const none = "none";
 const routes: { value: SalesRoute; label: string }[] = [
   { value: "FIELDS_SALES", label: "Field sales" },
   { value: "RESELLER", label: "Reseller" },
@@ -40,20 +41,20 @@ function localDate(value: string | null) {
 
 export function OpportunityDialog({ open, onOpenChange, opportunity }: { open: boolean; onOpenChange: (open: boolean) => void; opportunity?: Opportunity }) {
   const { user } = useAuth();
-  const { data: accounts } = useAccounts();
+  const { data: clients } = useClients();
   const { data: productGroups } = useOpportunityProducts();
   const save = useSaveOpportunity();
-  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<FormValues>();
-  const selectedAccountId = watch("accountId");
+  const { register, handleSubmit, reset, watch, setValue, control, formState: { errors } } = useForm<FormValues>();
+  const selectedClientId = watch("clientId");
   const selectedProductGroupId = watch("productGroupId");
   const selectedProductSubgroupId = watch("productSubgroupId");
-  const selectedAccount = useMemo(() => accounts?.accounts.find((item) => item.id === Number(selectedAccountId)), [accounts?.accounts, selectedAccountId]);
+  const selectedClient = useMemo(() => clients?.clients.find((item) => item.id === Number(selectedClientId)), [clients?.clients, selectedClientId]);
   const subgroups = useMemo(() => productGroups?.find((group) => group.id === Number(selectedProductGroupId))?.subgroups ?? [], [productGroups, selectedProductGroupId]);
 
   useEffect(() => {
     if (!open) return;
     reset({
-      accountId: opportunity ? String(opportunity.accountId) : "",
+      clientId: opportunity ? String(opportunity.clientId) : "",
       ownerId: String(opportunity?.ownerId ?? user?.id ?? ""),
       productGroupId: opportunity?.productSubgroup ? String(opportunity.productSubgroup.productGroup.id) : "",
       productSubgroupId: opportunity?.productSubgroupId ? String(opportunity.productSubgroupId) : "",
@@ -66,8 +67,8 @@ export function OpportunityDialog({ open, onOpenChange, opportunity }: { open: b
   }, [open, opportunity, reset, user?.id]);
 
   useEffect(() => {
-    if (open && selectedAccount) setValue("ownerId", String(selectedAccount.ownerId));
-  }, [open, selectedAccount, setValue]);
+    if (open && selectedClient) setValue("ownerId", String(selectedClient.ownerId));
+  }, [open, selectedClient, setValue]);
 
   useEffect(() => {
     if (!productGroups) return;
@@ -77,7 +78,7 @@ export function OpportunityDialog({ open, onOpenChange, opportunity }: { open: b
 
   const submit = async (values: FormValues) => {
     const input: OpportunityInput = {
-      accountId: Number(values.accountId),
+      clientId: Number(values.clientId),
       ownerId: Number(values.ownerId),
       productSubgroupId: values.productSubgroupId ? Number(values.productSubgroupId) : null,
       title: values.title,
@@ -95,13 +96,13 @@ export function OpportunityDialog({ open, onOpenChange, opportunity }: { open: b
       <DialogHeader><DialogTitle>{opportunity ? "Edit opportunity" : "New opportunity"}</DialogTitle><DialogDescription>Record the commercial details. Product and route can be added later.</DialogDescription></DialogHeader>
       <form className="mt-4 grid gap-4 sm:grid-cols-2" onSubmit={handleSubmit(submit)}>
         <div className="space-y-2 sm:col-span-2"><Label htmlFor="title">Title *</Label><Input id="title" placeholder="e.g. Fleet battery replacement" {...register("title", { required: "Title is required", maxLength: 200 })} />{errors.title && <p className="text-sm text-destructive">{errors.title.message}</p>}</div>
-        <div className="space-y-2"><Label htmlFor="accountId">Account *</Label><select id="accountId" className={selectClass} {...register("accountId", { required: "Account is required" })}><option value="">Select account</option>{accounts?.accounts.map((account) => <option key={account.id} value={account.id}>{account.businessName}</option>)}</select>{errors.accountId && <p className="text-sm text-destructive">{errors.accountId.message}</p>}</div>
-        <div className="space-y-2"><Label htmlFor="ownerName">Owner</Label><Input id="ownerName" readOnly value={selectedAccount?.owner ? `${selectedAccount.owner.firstName} ${selectedAccount.owner.lastName}` : "Select an account first"} /><input type="hidden" {...register("ownerId", { required: true })} /><p className="text-xs text-muted-foreground">Inherited from the selected account.</p></div>
+        <div className="space-y-2"><Label htmlFor="clientId">Client *</Label><Controller name="clientId" control={control} rules={{ required: "Client is required" }} render={({ field }) => <Select value={field.value} onValueChange={field.onChange}><SelectTrigger id="clientId"><SelectValue placeholder="Select client" /></SelectTrigger><SelectContent>{clients?.clients.map((client) => <SelectItem key={client.id} value={String(client.id)}>{client.businessName}</SelectItem>)}</SelectContent></Select>} />{errors.clientId && <p className="text-sm text-destructive">{errors.clientId.message}</p>}</div>
+        <div className="space-y-2"><Label htmlFor="ownerName">Owner</Label><Input id="ownerName" readOnly value={selectedClient?.owner ? `${selectedClient.owner.firstName} ${selectedClient.owner.lastName}` : "Select a client first"} /><input type="hidden" {...register("ownerId", { required: true })} /><p className="text-xs text-muted-foreground">Inherited from the selected client.</p></div>
         <div className="space-y-2"><Label htmlFor="estimatedAmount">Estimated amount *</Label><Input id="estimatedAmount" inputMode="decimal" placeholder="250000.00" {...register("estimatedAmount", { required: "Amount is required", pattern: { value: /^(0|[1-9]\d{0,15})(\.\d{1,2})?$/, message: "Use a valid amount with at most two decimals" } })} />{errors.estimatedAmount && <p className="text-sm text-destructive">{errors.estimatedAmount.message}</p>}</div>
-        <div className="space-y-2"><Label htmlFor="currency">Saved currency *</Label><select id="currency" className={selectClass} {...register("currency")}><option value="KES">KES</option><option value="USD">USD</option></select></div>
-        <div className="space-y-2"><Label htmlFor="productGroupId">Product group</Label><select id="productGroupId" className={selectClass} {...register("productGroupId")}><option value="">Not selected</option>{productGroups?.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></div>
-        <div className="space-y-2"><Label htmlFor="productSubgroupId">Product subgroup</Label><select id="productSubgroupId" className={selectClass} disabled={!selectedProductGroupId} {...register("productSubgroupId")}><option value="">Not selected</option>{subgroups.map((subgroup) => <option key={subgroup.id} value={subgroup.id}>{subgroup.name}</option>)}</select></div>
-        <div className="space-y-2"><Label htmlFor="routeToMarket">Route to market</Label><select id="routeToMarket" className={selectClass} {...register("routeToMarket")}><option value="">Not selected</option>{routes.map((route) => <option key={route.value} value={route.value}>{route.label}</option>)}</select></div>
+        <div className="space-y-2"><Label htmlFor="currency">Saved currency *</Label><Controller name="currency" control={control} render={({ field }) => <Select value={field.value} onValueChange={field.onChange}><SelectTrigger id="currency"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="KES">KES</SelectItem><SelectItem value="USD">USD</SelectItem></SelectContent></Select>} /></div>
+        <div className="space-y-2"><Label htmlFor="productGroupId">Product group</Label><Controller name="productGroupId" control={control} render={({ field }) => <Select value={field.value || none} onValueChange={(value) => field.onChange(value === none ? "" : value)}><SelectTrigger id="productGroupId"><SelectValue placeholder="Not selected" /></SelectTrigger><SelectContent><SelectItem value={none}>Not selected</SelectItem>{productGroups?.map((group) => <SelectItem key={group.id} value={String(group.id)}>{group.name}</SelectItem>)}</SelectContent></Select>} /></div>
+        <div className="space-y-2"><Label htmlFor="productSubgroupId">Product subgroup</Label><Controller name="productSubgroupId" control={control} render={({ field }) => <Select value={field.value || none} onValueChange={(value) => field.onChange(value === none ? "" : value)} disabled={!selectedProductGroupId}><SelectTrigger id="productSubgroupId"><SelectValue placeholder="Not selected" /></SelectTrigger><SelectContent><SelectItem value={none}>Not selected</SelectItem>{subgroups.map((subgroup) => <SelectItem key={subgroup.id} value={String(subgroup.id)}>{subgroup.name}</SelectItem>)}</SelectContent></Select>} /></div>
+        <div className="space-y-2"><Label htmlFor="routeToMarket">Route to market</Label><Controller name="routeToMarket" control={control} render={({ field }) => <Select value={field.value || none} onValueChange={(value) => field.onChange(value === none ? "" : value)}><SelectTrigger id="routeToMarket"><SelectValue placeholder="Not selected" /></SelectTrigger><SelectContent><SelectItem value={none}>Not selected</SelectItem>{routes.map((route) => <SelectItem key={route.value} value={route.value}>{route.label}</SelectItem>)}</SelectContent></Select>} /></div>
         <div className="space-y-2"><Label htmlFor="estimatedCloseAt">Estimated close date</Label><DateInput id="estimatedCloseAt" {...register("estimatedCloseAt")} /></div>
         {save.error && <p role="alert" className="text-sm text-destructive sm:col-span-2">{save.error.message}</p>}
         <div className="flex justify-end gap-2 sm:col-span-2"><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button type="submit" disabled={save.isPending}>{save.isPending ? "Saving..." : "Save opportunity"}</Button></div>

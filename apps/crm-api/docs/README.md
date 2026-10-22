@@ -28,7 +28,8 @@ See the repository [README](../../../README.md) and
 [application refactor plan](../../../docs/application-refactor-plan.md) for the
 current local setup and remaining work.
 Run `npm run seed:dev` from `apps/crm-api` to create or refresh the local
-development administrator and three sample customers.
+development administrator plus repeatable sample clients, contacts, opportunities,
+interactions, follow-ups and automotive product groups.
 
 ## Detailed documentation
 

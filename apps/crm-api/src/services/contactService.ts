@@ -1,6 +1,6 @@
 import { prisma } from "../client.js";
 import type { Prisma } from "@prisma/client";
-import { AccountService, type AccountActor } from "./accountService.js";
+import { ClientService, type ClientActor } from "./clientService.js";
 
 type ContactData = {
   firstName: string;
@@ -11,8 +11,8 @@ type ContactData = {
   isPrimary?: boolean;
 };
 
-function access(actor: AccountActor): Prisma.ContactWhereInput {
-  return { account: { deletedAt: null, ...(actor.role === "SALES_REP" ? { ownerId: actor.id } : {}) } };
+function access(actor: ClientActor): Prisma.ContactWhereInput {
+  return { client: { deletedAt: null, ...(actor.role === "SALES_REP" ? { ownerId: actor.id } : {}) } };
 }
 
 function clean(data: Partial<ContactData>) {
@@ -27,15 +27,15 @@ function clean(data: Partial<ContactData>) {
 }
 
 export class ContactService {
-  private accounts = new AccountService();
+  private clients = new ClientService();
 
-  async create(actor: AccountActor, data: ContactData & { accountId: number }) {
-    if (!await this.accounts.getById(actor, data.accountId)) return null;
-    return prisma.contact.create({ data: { accountId: data.accountId, ...clean(data), firstName: data.firstName.trim(), lastName: data.lastName.trim() } });
+  async create(actor: ClientActor, data: ContactData & { clientId: number }) {
+    if (!await this.clients.getById(actor, data.clientId)) return null;
+    return prisma.contact.create({ data: { clientId: data.clientId, ...clean(data), firstName: data.firstName.trim(), lastName: data.lastName.trim() } });
   }
 
-  async list(actor: AccountActor, filters: { accountId?: number; page: number; limit: number }) {
-    const where = { ...access(actor), ...(filters.accountId ? { accountId: filters.accountId } : {}) };
+  async list(actor: ClientActor, filters: { clientId?: number; page: number; limit: number }) {
+    const where = { ...access(actor), ...(filters.clientId ? { clientId: filters.clientId } : {}) };
     const [contacts, total] = await prisma.$transaction([
       prisma.contact.findMany({ where, orderBy: { createdAt: "desc" }, skip: (filters.page - 1) * filters.limit, take: filters.limit }),
       prisma.contact.count({ where }),
@@ -43,16 +43,16 @@ export class ContactService {
     return { contacts, pagination: { page: filters.page, limit: filters.limit, total, totalPages: Math.ceil(total / filters.limit) } };
   }
 
-  async getById(actor: AccountActor, id: number) {
+  async getById(actor: ClientActor, id: number) {
     return prisma.contact.findFirst({ where: { ...access(actor), id } });
   }
 
-  async update(actor: AccountActor, id: number, data: Partial<ContactData>) {
+  async update(actor: ClientActor, id: number, data: Partial<ContactData>) {
     const result = await prisma.contact.updateMany({ where: { ...access(actor), id }, data: clean(data) });
     return result.count ? this.getById(actor, id) : null;
   }
 
-  async delete(actor: AccountActor, id: number) {
+  async delete(actor: ClientActor, id: number) {
     const result = await prisma.contact.deleteMany({ where: { ...access(actor), id } });
     return result.count > 0;
   }
