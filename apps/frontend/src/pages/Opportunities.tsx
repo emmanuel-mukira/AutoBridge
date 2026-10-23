@@ -9,7 +9,7 @@ import { OpportunityKanbanBoard } from "@/features/opportunities/components/Oppo
 import { OpportunityListView } from "@/features/opportunities/components/OpportunityListView";
 import { OpportunityStageDialog } from "@/features/opportunities/components/OpportunityStageDialog";
 import { useOpportunities, useTransitionOpportunity } from "@/features/opportunities/hooks/useOpportunities";
-import type { Opportunity, OpportunityOutcome, OpportunityStage, SalesRoute } from "@/features/opportunities/services/opportunitiesApi";
+import type { ConfirmedSaleInput, Opportunity, OpportunityOutcome, OpportunityStage, SalesRoute } from "@/features/opportunities/services/opportunitiesApi";
 import { BriefcaseBusiness, LayoutGrid, List, Plus, Search } from "lucide-react";
 
 const all = "all";
@@ -41,9 +41,9 @@ export default function Opportunities() {
     else transition.mutate({ id: opportunity.id, stage: nextStage });
   };
 
-  const changeStage = async (nextStage: OpportunityStage, outcome?: OpportunityOutcome) => {
+  const changeStage = async (nextStage: OpportunityStage, outcome?: OpportunityOutcome, confirmedSale?: ConfirmedSaleInput) => {
     if (!stageChange) return;
-    await transition.mutateAsync({ id: stageChange.opportunity.id, stage: nextStage, outcome });
+    await transition.mutateAsync({ id: stageChange.opportunity.id, stage: nextStage, outcome, confirmedSale });
     setStageChange(null);
   };
 

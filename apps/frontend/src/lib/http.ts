@@ -191,7 +191,7 @@ async function request<T>(
     friendly = "Session expired. Please log in again.";
   } else if (res.status === 403) {
     friendly = "Forbidden. You do not have permission to perform this action.";
-  } else if (res.status >= 500) {
+  } else if (res.status >= 500 && !serverMsg) {
     friendly = "Server error. Please try again later.";
   } else if (!serverMsg) {
     friendly = `Request failed (${res.status}).`;

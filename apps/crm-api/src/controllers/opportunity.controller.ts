@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { OpportunityService } from "../services/opportunityService.js";
-import { CreateOpportunitySchema, ListOpportunitiesSchema, OpportunityIdSchema, TransitionOpportunitySchema, UpdateOpportunitySchema } from "../schemas/opportunity.schemas.js";
+import { ConfirmedSaleSchema, CreateOpportunitySchema, ListOpportunitiesSchema, OpportunityIdSchema, TransitionOpportunitySchema, UpdateOpportunitySchema } from "../schemas/opportunity.schemas.js";
 
 const service = new OpportunityService();
 
@@ -65,6 +65,17 @@ export async function transition(req: Request, res: Response, next: NextFunction
     if (error instanceof Error && error.message === "STAGE_TRANSITION_CONFLICT") return void res.status(409).json({ error: "The opportunity changed before this update. Refresh and try again" });
     next(error);
   }
+}
+
+export async function correctConfirmedSale(req: Request, res: Response, next: NextFunction) {
+  const id = OpportunityIdSchema.safeParse(req.params);
+  const data = ConfirmedSaleSchema.safeParse(req.body);
+  if (!id.success || !data.success) return void res.status(400).json({ error: "Invalid confirmed sale value", details: data.success ? undefined : data.error.flatten().fieldErrors });
+  try {
+    const opportunity = await service.correctConfirmedSale(req.user!, id.data.id, data.data);
+    if (!opportunity) return void res.status(404).json({ error: "Won opportunity not found or access denied" });
+    res.json(opportunity);
+  } catch (error) { next(error); }
 }
 
 export async function products(req: Request, res: Response, next: NextFunction) {

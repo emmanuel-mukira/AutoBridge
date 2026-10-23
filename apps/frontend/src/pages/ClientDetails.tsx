@@ -7,6 +7,7 @@ import { ClientDialog } from "@/features/clients/components/ClientDialog";
 import { ClientContactsDialog } from "@/features/clients/components/ClientContactsDialog";
 import { Building2, MapPin, Pencil, Users } from "lucide-react";
 import { ActivitySection } from "@/features/activities/components/ActivitySection";
+import { ClientSalesHistory } from "@/features/clients/components/ClientSalesHistory";
 
 export default function ClientDetails() {
   const [editOpen, setEditOpen] = useState(false);
@@ -28,6 +29,7 @@ export default function ClientDetails() {
           <div><p className="text-sm text-muted-foreground">Business history</p><p className="font-medium">{client.shortHistory || "No history recorded"}</p></div>
         </CardContent>
       </Card>
+      <ClientSalesHistory clientId={client.id} />
       <ActivitySection clientId={client.id} />
       <ClientDialog open={editOpen} onOpenChange={setEditOpen} client={client} />
       <ClientContactsDialog open={contactsOpen} onOpenChange={setContactsOpen} client={client} />

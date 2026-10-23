@@ -118,10 +118,14 @@ try {
   assert.equal((await request(`/api/opportunities/${createdOpportunity.data.id}/stage`, "PATCH", { stage: "PROPOSAL" }, rep)).data.stage, "PROPOSAL");
   assert.equal((await request(`/api/opportunities/${createdOpportunity.data.id}/stage`, "PATCH", { stage: "QUALIFYING" }, rep)).response.status, 409);
   assert.equal((await request(`/api/opportunities/${createdOpportunity.data.id}/stage`, "PATCH", { stage: "CLOSED" }, rep)).response.status, 400);
-  const closed = await request(`/api/opportunities/${createdOpportunity.data.id}/stage`, "PATCH", { stage: "CLOSED", outcome: "WON" }, rep);
+  assert.equal((await request(`/api/opportunities/${createdOpportunity.data.id}/stage`, "PATCH", { stage: "CLOSED", outcome: "WON" }, rep)).response.status, 400);
+  const closed = await request(`/api/opportunities/${createdOpportunity.data.id}/stage`, "PATCH", { stage: "CLOSED", outcome: "WON", confirmedAmount: "295000.00", confirmedCurrency: "KES" }, rep);
   assert.equal(closed.response.status, 200);
   assert.equal(closed.data.outcome, "WON");
   assert.ok(closed.data.outcomeAt);
+  assert.equal(closed.data.confirmedAmount, "295000");
+  assert.equal(closed.data.confirmedCurrency, "KES");
+  assert.equal(closed.data.confirmedQuoteUnitsPerUsd, "129");
   assert.equal((await request(`/api/opportunities/${createdOpportunity.data.id}/stage`, "PATCH", { stage: "NEW" }, rep)).response.status, 409);
 
   const adminOpportunity = await request("/api/opportunities", "POST", {

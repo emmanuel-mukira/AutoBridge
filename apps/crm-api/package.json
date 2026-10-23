@@ -17,6 +17,8 @@
     "verify:opportunities": "node scripts/verify-opportunities.mjs",
     "verify:activities": "node scripts/verify-activities.mjs",
     "verify:analytics": "node scripts/verify-analytics.mjs",
+    "verify:sales-history": "node scripts/verify-sales-history.mjs",
+    "verify:predictions": "node scripts/verify-predictions.mjs",
     "verify:currency": "node --experimental-strip-types scripts/verify-currency.ts"
   },
   "keywords": [],

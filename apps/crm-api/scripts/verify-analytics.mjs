@@ -68,7 +68,12 @@ try {
   const kesOpen = await createOpportunity(rep, client.id, { title: "KES open", amount: "129000", currency: "KES", route: "RESELLER", productSubgroupId: subgroup.id });
   const usdOpen = await createOpportunity(rep, client.id, { title: "USD open", amount: "1000", currency: "USD", route: "FIELDS_SALES", productSubgroupId: subgroup.id });
   const won = await createOpportunity(rep, client.id, { title: "Won", amount: "500", currency: "USD", route: "RESELLER", productSubgroupId: subgroup.id });
-  assert.equal((await request(`/api/opportunities/${won.id}/stage`, "PATCH", { stage: "CLOSED", outcome: "WON" }, rep)).response.status, 200);
+  assert.equal((await request(`/api/opportunities/${won.id}/stage`, "PATCH", {
+    stage: "CLOSED",
+    outcome: "WON",
+    confirmedAmount: "500",
+    confirmedCurrency: "USD",
+  }, rep)).response.status, 200);
   const lost = await createOpportunity(otherRep, otherClient.id, { title: "Lost", amount: "900", currency: "USD", route: "TELESALES", productSubgroupId: subgroup.id });
   assert.equal((await request(`/api/opportunities/${lost.id}/stage`, "PATCH", { stage: "CLOSED", outcome: "LOST" }, otherRep)).response.status, 200);
   await createOpportunity(emptyRep, emptyClient.id, { title: "Only open", amount: "100", currency: "USD", route: "OTHER", productSubgroupId: subgroup.id });

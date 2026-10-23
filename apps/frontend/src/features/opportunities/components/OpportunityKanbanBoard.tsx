@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { CalendarDays, Pencil } from "lucide-react";
 import type { Opportunity, OpportunityStage } from "../services/opportunitiesApi";
 import { opportunityStageClass, opportunityStageLabels } from "../utils/labels";
+import { OpportunityScoreBadge } from "./OpportunityScoreBadge";
 
 type KanbanOpportunity = Omit<Opportunity, "id"> & {
   id: string;
@@ -64,6 +65,7 @@ export function OpportunityKanbanBoard({ opportunities, displayCurrency, onEdit,
                 </div>
                 <div className="flex flex-wrap gap-1"><Badge className={opportunityStageClass[opportunity.stage]} variant="outline">{opportunityStageLabels[opportunity.stage]}</Badge>{opportunity.outcome && <Badge variant={opportunity.outcome === "WON" ? "default" : "destructive"}>{opportunity.outcome === "WON" ? "Won" : "Lost"}</Badge>}</div>
                 <p className="text-sm font-semibold">{formatMoney(Number(opportunity.estimatedAmount), opportunity.currency, displayCurrency)}</p>
+                <OpportunityScoreBadge prediction={opportunity.latestPrediction ?? null} />
                 <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />{opportunity.estimatedCloseAt ? new Date(opportunity.estimatedCloseAt).toLocaleDateString() : "No close date"}</span>
                   <Avatar className="h-7 w-7"><AvatarFallback className="text-[10px]">{opportunity.owner.firstName[0]}{opportunity.owner.lastName[0]}</AvatarFallback></Avatar>

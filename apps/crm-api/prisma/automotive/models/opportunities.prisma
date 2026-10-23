@@ -42,6 +42,13 @@ model Opportunity {
   stage             OpportunityStage    @default(NEW)
   outcome           OpportunityOutcome?
   outcomeAt         DateTime?
+  confirmedAmount   Decimal?            @db.Decimal(18, 2)
+  confirmedCurrency String?              @db.VarChar(3)
+  confirmedAmountUsd Decimal?            @db.Decimal(18, 6)
+  confirmedQuoteUnitsPerUsd Decimal?      @db.Decimal(18, 6)
+  confirmedRateSource String?
+  confirmedRateObservedAt DateTime?
+  confirmedAt       DateTime?
   estimatedCloseAt  DateTime?
   estimatedAt       DateTime            @default(now())
   createdAt         DateTime            @default(now())
@@ -56,6 +63,7 @@ model Opportunity {
 
   @@index([stage, outcome])
   @@index([clientId])
+  @@index([clientId, outcome, outcomeAt])
 }
 
 model OpportunityPrediction {
