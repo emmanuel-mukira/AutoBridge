@@ -97,5 +97,6 @@ model PredictionReview {
   prediction OpportunityPrediction @relation(fields: [predictionId], references: [id])
   reviewer   User                  @relation(fields: [reviewerId], references: [id])
 
+  @@unique([predictionId, reviewerId])
   @@index([predictionId, createdAt])
 }

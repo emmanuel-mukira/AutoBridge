@@ -2,7 +2,6 @@ import { subYears } from "date-fns";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../client.js";
 import { deriveIbmRevenueHistoryCode, ILLUSTRATIVE_USD_KES_RATE } from "../domain/currency.js";
-import type { VerifyRevenueCoverageInput } from "../schemas/clientSalesHistory.schemas.js";
 import type { ClientActor } from "./clientService.js";
 
 const opportunityInclude = {
@@ -141,13 +140,13 @@ export class ClientSalesHistoryService {
     };
   }
 
-  async verifyCoverage(actor: ClientActor, clientId: number, input: VerifyRevenueCoverageInput) {
+  async verifyCoverage(actor: ClientActor, clientId: number) {
     const client = await this.findClient(actor, clientId);
     if (!client) return null;
-    const coverageStart = new Date(input.coverageStart);
-    const coverageEnd = new Date(input.coverageEnd);
     const verifiedAt = new Date();
-    if (coverageEnd > verifiedAt) throw new Error("FUTURE_COVERAGE");
+    const coverageStart = subYears(verifiedAt, 2);
+    const coverageEnd = verifiedAt;
+    const evidenceSource = "User confirmed complete sales history in AutoBridge";
 
     const range = { clientId, outcomeAt: { gte: coverageStart, lt: coverageEnd } } satisfies Prisma.OpportunityWhereInput;
     const [missingCount, confirmedSales] = await Promise.all([
@@ -159,18 +158,13 @@ export class ClientSalesHistoryService {
     ]);
     if (missingCount) throw new Error("INCOMPLETE_WON_SALES");
     const amount = sumUsd(confirmedSales);
-    const existing = await prisma.clientRevenueSummary.findFirst({
-      where: { clientId, coverageStart, coverageEnd, evidenceSource: input.evidenceSource },
-      orderBy: { verifiedAt: "desc" },
-    });
-    if (existing?.amount.equals(amount) && existing.currency === "USD") return existing;
     return prisma.clientRevenueSummary.create({ data: {
       clientId,
       amount,
       currency: "USD",
       coverageStart,
       coverageEnd,
-      evidenceSource: input.evidenceSource,
+      evidenceSource,
       verifiedAt,
       verifiedById: actor.id,
     } });

@@ -12,6 +12,7 @@ npm run verify:activities
 npm run verify:analytics
 npm run verify:sales-history
 npm run verify:predictions
+npm run verify:prediction-reviews
 npm run seed:dev
 curl http://127.0.0.1:3000/health
 ```
@@ -44,5 +45,7 @@ When validating the CRM API, cover:
 - primary/fallback SHAP additivity, immutable explanation persistence and old null-explanation compatibility;
 - batched latest score summaries for scored, stale and unscored opportunity lists;
 - ML timeout/failure behavior with no fabricated or persisted result.
+- all three subjective prediction-review assessments, optional-comment validation and one review per reviewer per prediction;
+- review owner/admin authorization, historical association and unchanged prediction probability, stage and outcome.
 
-`verify:predictions` requires FastAPI to be running with the same `ML_API_TOKEN` and URL configured for Express. Manual explanation bars, board/list score badges, responsive behavior and dark mode remain browser acceptance work. Prediction review remains a later checkpoint.
+`verify:predictions` requires FastAPI to be running with the same `ML_API_TOKEN` and URL configured for Express. `verify:prediction-reviews` creates temporary saved predictions directly, exercises the authenticated review API, and removes all temporary rows. Manual review form behavior, explanation bars, board/list score badges, responsive behavior and dark mode remain browser acceptance work.

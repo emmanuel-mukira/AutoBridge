@@ -5,13 +5,7 @@ export const ClientSalesHistoryQuerySchema = z.object({
 });
 
 export const VerifyRevenueCoverageSchema = z.object({
-  coverageStart: z.string().datetime(),
-  coverageEnd: z.string().datetime(),
-  evidenceSource: z.string().trim().min(3).max(500),
-}).superRefine((value, context) => {
-  if (new Date(value.coverageStart) >= new Date(value.coverageEnd)) {
-    context.addIssue({ code: z.ZodIssueCode.custom, path: ["coverageEnd"], message: "Coverage end must be after coverage start" });
-  }
-});
+  confirmedComplete: z.literal(true),
+}).strict();
 
 export type VerifyRevenueCoverageInput = z.infer<typeof VerifyRevenueCoverageSchema>;

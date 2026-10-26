@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { OpportunityIdSchema } from "../schemas/opportunity.schemas.js";
+import { CreatePredictionReviewSchema, OpportunityIdSchema, PredictionReviewParamsSchema } from "../schemas/opportunity.schemas.js";
 import { OpportunityScoringService } from "../services/opportunityScoringService.js";
 
 const service = new OpportunityScoringService();
@@ -40,4 +40,28 @@ export async function history(req: Request, res: Response, next: NextFunction) {
     if (!predictions) return void res.status(404).json({ error: "Opportunity not found or access denied" });
     res.json(predictions);
   } catch (error) { next(error); }
+}
+
+export async function reviews(req: Request, res: Response, next: NextFunction) {
+  const params = PredictionReviewParamsSchema.safeParse(req.params);
+  if (!params.success) return void res.status(400).json({ error: "Invalid opportunity or prediction ID" });
+  try {
+    const rows = await service.reviews(req.user!, params.data.id, params.data.predictionId);
+    if (!rows) return void res.status(404).json({ error: "Prediction not found or access denied" });
+    res.json({ reviews: rows });
+  } catch (error) { next(error); }
+}
+
+export async function review(req: Request, res: Response, next: NextFunction) {
+  const params = PredictionReviewParamsSchema.safeParse(req.params);
+  const body = CreatePredictionReviewSchema.safeParse(req.body);
+  if (!params.success || !body.success) return void res.status(400).json({ error: "Invalid prediction review", details: body.success ? undefined : body.error.flatten() });
+  try {
+    const row = await service.review(req.user!, params.data.id, params.data.predictionId, body.data);
+    if (!row) return void res.status(404).json({ error: "Prediction not found or access denied" });
+    res.status(201).json(row);
+  } catch (error) {
+    if (error instanceof Error && error.message === "REVIEW_EXISTS") return void res.status(409).json({ error: "You have already reviewed this prediction", code: "REVIEW_EXISTS" });
+    next(error);
+  }
 }

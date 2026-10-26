@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { opportunitiesApi, type ConfirmedSaleInput, type OpportunityFilters, type OpportunityInput, type OpportunityOutcome, type OpportunityStage } from "../services/opportunitiesApi";
+import { opportunitiesApi, type ConfirmedSaleInput, type OpportunityFilters, type OpportunityInput, type OpportunityOutcome, type OpportunityStage, type PredictionAssessment } from "../services/opportunitiesApi";
 
 const keys = {
   all: ["opportunities"] as const,
@@ -25,6 +25,19 @@ export function useScoreOpportunity() {
       client.invalidateQueries({ queryKey: keys.predictions(prediction.opportunityId) });
       client.invalidateQueries({ queryKey: keys.all });
       toast.success("Win probability generated");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+}
+
+export function useReviewPrediction(opportunityId: number) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ predictionId, assessment, comment }: { predictionId: number; assessment: PredictionAssessment; comment?: string }) =>
+      opportunitiesApi.reviewPrediction(opportunityId, predictionId, { assessment, ...(comment ? { comment } : {}) }),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: keys.predictions(opportunityId) });
+      toast.success("Prediction review saved");
     },
     onError: (error) => toast.error(error.message),
   });

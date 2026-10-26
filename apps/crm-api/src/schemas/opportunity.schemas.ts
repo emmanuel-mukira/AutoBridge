@@ -53,8 +53,19 @@ export const ListOpportunitiesSchema = z.object({
 
 export const OpportunityIdSchema = z.object({ id: z.coerce.number().int().positive() });
 
+export const PredictionReviewParamsSchema = z.object({
+  id: z.coerce.number().int().positive(),
+  predictionId: z.coerce.number().int().positive(),
+});
+
+export const CreatePredictionReviewSchema = z.object({
+  assessment: z.enum(["REASONABLE", "OVERESTIMATED", "UNDERESTIMATED"]),
+  comment: z.string().trim().max(1000).optional(),
+}).strict();
+
 export type CreateOpportunityInput = z.infer<typeof CreateOpportunitySchema>;
 export type UpdateOpportunityInput = z.infer<typeof UpdateOpportunitySchema>;
 export type TransitionOpportunityInput = z.infer<typeof TransitionOpportunitySchema>;
 export type ConfirmedSaleInput = z.infer<typeof ConfirmedSaleSchema>;
 export type ListOpportunitiesInput = z.infer<typeof ListOpportunitiesSchema>;
+export type CreatePredictionReviewInput = z.infer<typeof CreatePredictionReviewSchema>;

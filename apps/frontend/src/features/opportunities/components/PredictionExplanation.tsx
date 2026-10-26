@@ -1,5 +1,6 @@
+import { useUIStore } from "@/app/store";
+import { formatMoney, ILLUSTRATIVE_KES_PER_USD, type DisplayCurrency } from "@/lib/currency";
 import type { OpportunityPrediction, PredictionContribution } from "../services/opportunitiesApi";
-import { formatMoney } from "@/lib/currency";
 
 const inputLabels: Record<string, string> = {
   "Opportunity Amount USD": "Opportunity amount",
@@ -9,48 +10,41 @@ const inputLabels: Record<string, string> = {
   "Supplies Subgroup": "Product subgroup",
 };
 
-const revenueBandDescriptions: Record<string, string> = {
-  "0": "Verified no qualifying revenue",
-  "1": "USD 1 to under USD 50,000",
-  "2": "USD 50,000 to under USD 400,000",
-  "3": "USD 400,000 to under USD 1,500,000",
-  "4": "USD 1,500,000 or more",
-};
-
-function displayInput(name: string, value: unknown) {
-  if (name === "Opportunity Amount USD") return formatMoney(Number(value), "USD", "USD");
-  if (name === "Revenue From Client Past Two Years") return `Band ${value}`;
-  return String(value);
+function savedKesRate(prediction: OpportunityPrediction) {
+  const snapshot = prediction.conversionSnapshot;
+  const rate = Number(snapshot.quoteUnitsPerUsd);
+  return snapshot.originalCurrency === "KES" && Number.isFinite(rate) && rate > 0
+    ? rate
+    : ILLUSTRATIVE_KES_PER_USD;
 }
 
-function inputDescription(name: string, value: unknown) {
-  if (name === "Opportunity Amount USD") return "Model-ready USD value saved at scoring time";
-  if (name === "Revenue From Client Past Two Years") return revenueBandDescriptions[String(value)];
-  return undefined;
+function revenueDescription(value: unknown, currency: DisplayCurrency, kesPerUsd: number) {
+  const bands: Record<string, string> = {
+    "0": "No qualifying sales in the previous two years",
+    "1": `${formatMoney(1, "USD", currency, kesPerUsd)} to under ${formatMoney(50_000, "USD", currency, kesPerUsd)}`,
+    "2": `${formatMoney(50_000, "USD", currency, kesPerUsd)} to under ${formatMoney(400_000, "USD", currency, kesPerUsd)}`,
+    "3": `${formatMoney(400_000, "USD", currency, kesPerUsd)} to under ${formatMoney(1_500_000, "USD", currency, kesPerUsd)}`,
+    "4": `${formatMoney(1_500_000, "USD", currency, kesPerUsd)} or more`,
+  };
+  return bands[String(value)] ?? "Saved revenue category unavailable";
 }
 
-function featureValue(item: PredictionContribution) {
-  if (item.feature_unit === "USD") return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(item.feature_value));
-  if (item.feature_unit === "IBM revenue band") return `Band ${item.feature_value}`;
+function featureValue(item: PredictionContribution, currency: DisplayCurrency, kesPerUsd: number) {
+  if (item.feature_unit === "USD") return formatMoney(Number(item.feature_value), "USD", currency, kesPerUsd);
+  if (item.feature_unit === "IBM revenue band") return revenueDescription(item.feature_value, currency, kesPerUsd);
   return String(item.feature_value);
 }
 
-function contributionLabel(contribution: number) {
-  const points = contribution * 100;
-  const precision = Math.abs(points) >= 0.1 ? 1 : Math.abs(points) >= 0.01 ? 2 : 3;
-  return `${points > 0 ? "+" : ""}${points.toFixed(precision)} pp`;
+function displayInput(name: string, value: unknown, currency: DisplayCurrency, kesPerUsd: number) {
+  if (name === "Opportunity Amount USD") return formatMoney(Number(value), "USD", currency, kesPerUsd);
+  if (name === "Revenue From Client Past Two Years") return revenueDescription(value, currency, kesPerUsd);
+  return String(value);
 }
 
-function Factors({ title, items, positive, maximum }: { title: string; items: PredictionContribution[]; positive: boolean; maximum: number }) {
-  return <div className="space-y-2">
-    <h4 className="text-sm font-medium">{title}</h4>
-    {items.length === 0 && <p className="text-xs text-muted-foreground">No {positive ? "positive" : "negative"} contribution for this score.</p>}
-    {items.map((item) => <div key={item.feature} className="space-y-1" title={`${item.feature}: ${featureValue(item)}; ${contributionLabel(item.contribution)}`}>
-      <div className="flex items-center justify-between gap-3 text-xs"><span className="truncate">{item.display_name}</span><span className={positive ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}>{contributionLabel(item.contribution)}</span></div>
-      <div className="h-2 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full ${positive ? "bg-emerald-500" : "bg-red-500"}`} style={{ width: `${maximum ? Math.abs(item.contribution) / maximum * 100 : 0}%`, minWidth: item.contribution === 0 ? undefined : "2px" }} /></div>
-      <p className="text-[11px] text-muted-foreground">{featureValue(item)}</p>
-    </div>)}
-  </div>;
+function contributionLabel(contribution: number) {
+  const points = Math.abs(contribution * 100);
+  const precision = points >= 0.1 ? 1 : points >= 0.01 ? 2 : 3;
+  return `${contribution >= 0 ? "Increased" : "Decreased"} by ${points.toFixed(precision)} percentage points`;
 }
 
 function modelInputs(prediction: OpportunityPrediction) {
@@ -60,15 +54,31 @@ function modelInputs(prediction: OpportunityPrediction) {
 }
 
 export function PredictionExplanation({ prediction }: { prediction: OpportunityPrediction }) {
+  const displayCurrency = useUIStore((state) => state.displayCurrency);
   const explanation = prediction.explanation;
   const inputs = modelInputs(prediction);
-  const maximum = explanation?.status === "available" ? Math.max(...explanation.contributions.map((item) => Math.abs(item.contribution)), 0) : 0;
-  return <div className="space-y-4">
-    <div><h4 className="mb-2 text-sm font-medium">Model inputs</h4><dl className="grid gap-2 text-xs sm:grid-cols-2">{inputs.map(([name, value]) => <div key={name} className="rounded-md bg-muted/60 p-2"><dt className="text-muted-foreground">{inputLabels[name] ?? name}</dt><dd className="mt-1 font-medium">{displayInput(name, value)}</dd>{inputDescription(name, value) && <dd className="mt-1 text-[11px] text-muted-foreground">{inputDescription(name, value)}</dd>}</div>)}</dl><p className="mt-2 text-xs text-muted-foreground">Amounts shown here are the saved model-ready USD inputs and do not follow the page display-currency preference.</p></div>
-    {!explanation || explanation.status === "unavailable" ? <p className="text-sm text-muted-foreground">Explanation unavailable for this saved prediction{explanation?.status === "unavailable" ? `: ${explanation.reason}` : "."}</p> : <>
-      <p className="text-sm text-muted-foreground">Each factor shows how much that input moved this prediction above or below the model baseline. These associations do not establish causation.</p>
-      <div className="grid gap-5 sm:grid-cols-2"><Factors title="Positive factors" items={explanation.top_positive} positive maximum={maximum} /><Factors title="Negative factors" items={explanation.top_negative} positive={false} maximum={maximum} /></div>
-      <p className="text-xs text-muted-foreground">Baseline {(explanation.baseline * 100).toFixed(1)}% · Tree SHAP on the Won-probability output · {explanation.explainer.feature_perturbation.replaceAll("_", " ")} · SHAP {explanation.explainer.version}</p>
-    </>}
+  const kesPerUsd = savedKesRate(prediction);
+  const topFactors = explanation?.status === "available"
+    ? explanation.top_factors ?? [...explanation.contributions].sort((left, right) => Math.abs(right.contribution) - Math.abs(left.contribution)).slice(0, 3)
+    : [];
+  const maximum = Math.max(...topFactors.map((item) => Math.abs(item.contribution)), 0);
+
+  return <div className="space-y-5">
+    <section aria-labelledby={`prediction-inputs-${prediction.id}`}>
+      <h4 id={`prediction-inputs-${prediction.id}`} className="mb-2 text-sm font-medium">Factors used for this prediction</h4>
+      {inputs.length > 0 ? <dl className="grid gap-2 text-xs sm:grid-cols-2">{inputs.map(([name, value]) => <div key={name} className="rounded-md bg-muted/60 p-2"><dt className="text-muted-foreground">{inputLabels[name] ?? name}</dt><dd className="mt-1 font-medium">{displayInput(name, value, displayCurrency, kesPerUsd)}</dd></div>)}</dl> : <p className="text-sm text-muted-foreground">Saved factor details are not available for this older prediction.</p>}
+      {displayCurrency === "KES" && inputs.some(([name]) => name === "Opportunity Amount USD") && <p className="mt-2 text-xs text-muted-foreground">Displayed in KES using the saved conversion rate where available. The original USD prediction input remains unchanged.</p>}
+    </section>
+    {!explanation || explanation.status === "unavailable" ? <p className="text-sm text-muted-foreground">An explanation was not recorded for this prediction.</p> : <section className="space-y-3" aria-labelledby={`prediction-factors-${prediction.id}`}>
+      <div><h4 id={`prediction-factors-${prediction.id}`} className="text-sm font-medium">Top factors</h4><p className="text-xs text-muted-foreground">The three strongest model associations are shown; other factors also contributed. These are not causal effects.</p></div>
+      <div className="space-y-3">{topFactors.map((item) => {
+        const positive = item.contribution >= 0;
+        return <div key={item.feature} className="space-y-1 rounded-md border p-3">
+          <div className="flex flex-col justify-between gap-1 text-sm sm:flex-row sm:items-center"><span className="font-medium">{item.display_name}</span><span className={positive ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}>{contributionLabel(item.contribution)}</span></div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className={`h-full rounded-full ${positive ? "bg-emerald-500" : "bg-red-500"}`} style={{ width: `${maximum ? Math.abs(item.contribution) / maximum * 100 : 0}%`, minWidth: item.contribution === 0 ? undefined : "2px" }} /></div>
+          <p className="text-xs text-muted-foreground">{featureValue(item, displayCurrency, kesPerUsd)}</p>
+        </div>;
+      })}</div>
+    </section>}
   </div>;
 }

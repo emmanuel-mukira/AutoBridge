@@ -3,7 +3,7 @@ import { InteractionTypeSchema } from "./interaction.schemas.js";
 
 export const CreateFollowUpSchema = z.object({
   clientId: z.number().int().positive(),
-  opportunityId: z.number().int().positive().nullable().optional(),
+  opportunityId: z.number().int().positive(),
   ownerId: z.number().int().positive().optional(),
   title: z.string().trim().min(1).max(200),
   channel: InteractionTypeSchema,
@@ -11,6 +11,7 @@ export const CreateFollowUpSchema = z.object({
 });
 
 export const UpdateFollowUpSchema = z.object({
+  opportunityId: z.number().int().positive().optional(),
   title: z.string().trim().min(1).max(200).optional(),
   channel: InteractionTypeSchema.optional(),
   dueAt: z.string().datetime().optional(),

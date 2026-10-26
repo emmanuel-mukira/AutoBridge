@@ -85,6 +85,14 @@ def test_shap_explanations_reconstruct_won_probability_for_both_variants():
         assert explanation["explainer"]["class_index"] == 1
         assert explanation["explainer"]["class_label"] == "Won"
         assert [item["feature"] for item in explanation["contributions"]] == expected_features
+        assert len(explanation["top_factors"]) == 3
+        assert explanation["top_factors"] == sorted(
+            explanation["contributions"], key=lambda item: abs(item["contribution"]), reverse=True
+        )[:3]
+        assert all(
+            item["contribution"] == next(full["contribution"] for full in explanation["contributions"] if full["feature"] == item["feature"])
+            for item in explanation["top_factors"]
+        )
         assert explanation["reconstructed_value"] == pytest.approx(body["won_probability"], abs=1e-6)
         assert sum(item["contribution"] for item in explanation["contributions"]) + explanation["baseline"] == pytest.approx(body["won_probability"], abs=1e-6)
 

@@ -45,7 +45,7 @@ export async function update(req: Request, res: Response, next: NextFunction) {
     const interaction = await service.update(req.user!, id.data.id, data.data);
     if (!interaction) return void res.status(404).json({ error: "Interaction not found or cannot be edited" });
     res.json(interaction);
-  } catch (error) { next(error); }
+  } catch (error) { if (!referenceError(error, res)) next(error); }
 }
 
 export async function remove(req: Request, res: Response, next: NextFunction) {

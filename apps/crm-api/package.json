@@ -19,6 +19,7 @@
     "verify:analytics": "node scripts/verify-analytics.mjs",
     "verify:sales-history": "node scripts/verify-sales-history.mjs",
     "verify:predictions": "node scripts/verify-predictions.mjs",
+    "verify:prediction-reviews": "node scripts/verify-prediction-reviews.mjs",
     "verify:currency": "node --experimental-strip-types scripts/verify-currency.ts"
   },
   "keywords": [],

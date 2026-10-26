@@ -4,13 +4,14 @@ export const InteractionTypeSchema = z.enum(["CALL", "EMAIL", "MEETING", "SITE_V
 
 export const CreateInteractionSchema = z.object({
   clientId: z.number().int().positive(),
-  opportunityId: z.number().int().positive().nullable().optional(),
+  opportunityId: z.number().int().positive(),
   interactionType: InteractionTypeSchema,
   notes: z.string().trim().max(5000).nullable().optional(),
   occurredAt: z.string().datetime(),
 });
 
 export const UpdateInteractionSchema = z.object({
+  opportunityId: z.number().int().positive().optional(),
   interactionType: InteractionTypeSchema.optional(),
   notes: z.string().trim().max(5000).nullable().optional(),
   occurredAt: z.string().datetime().optional(),

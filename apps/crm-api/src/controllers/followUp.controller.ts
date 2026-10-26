@@ -48,7 +48,7 @@ export async function update(req: Request, res: Response, next: NextFunction) {
     const followUp = await service.update(req.user!, id.data.id, data.data);
     if (!followUp) return void res.status(404).json({ error: "Follow-up not found" });
     res.json(followUp);
-  } catch (error) { next(error); }
+  } catch (error) { if (!referenceError(error, res)) next(error); }
 }
 
 export async function complete(req: Request, res: Response, next: NextFunction) {

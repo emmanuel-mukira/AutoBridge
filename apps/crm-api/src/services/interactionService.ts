@@ -18,19 +18,17 @@ function writeAccess(actor: ClientActor): Prisma.InteractionWhereInput {
 }
 
 export class InteractionService {
-  private async validateReferences(actor: ClientActor, clientId: number, opportunityId?: number | null) {
+  private async validateReferences(actor: ClientActor, clientId: number, opportunityId: number) {
     const client = await prisma.client.findFirst({
       where: { id: clientId, deletedAt: null, ...(actor.role === "SALES_REP" ? { ownerId: actor.id } : {}) },
       select: { id: true },
     });
     if (!client) throw new Error("CLIENT_NOT_FOUND");
-    if (opportunityId) {
-      const opportunity = await prisma.opportunity.findFirst({
-        where: { id: opportunityId, clientId, ...(actor.role === "SALES_REP" ? { ownerId: actor.id } : {}) },
-        select: { id: true },
-      });
-      if (!opportunity) throw new Error("OPPORTUNITY_MISMATCH");
-    }
+    const opportunity = await prisma.opportunity.findFirst({
+      where: { id: opportunityId, clientId, ...(actor.role === "SALES_REP" ? { ownerId: actor.id } : {}) },
+      select: { id: true },
+    });
+    if (!opportunity) throw new Error("OPPORTUNITY_MISMATCH");
   }
 
   async create(actor: ClientActor, input: CreateInteractionInput) {
@@ -38,7 +36,7 @@ export class InteractionService {
     return prisma.interaction.create({
       data: {
         clientId: input.clientId,
-        opportunityId: input.opportunityId ?? null,
+        opportunityId: input.opportunityId,
         userId: actor.id,
         interactionType: input.interactionType,
         notes: input.notes || null,
@@ -74,9 +72,15 @@ export class InteractionService {
   }
 
   async update(actor: ClientActor, id: number, input: UpdateInteractionInput) {
+    if (input.opportunityId !== undefined) {
+      const current = await this.getById(actor, id);
+      if (!current) return null;
+      await this.validateReferences(actor, current.clientId, input.opportunityId);
+    }
     const updated = await prisma.interaction.updateMany({
       where: { ...writeAccess(actor), id },
       data: {
+        ...(input.opportunityId !== undefined ? { opportunityId: input.opportunityId } : {}),
         ...(input.interactionType !== undefined ? { interactionType: input.interactionType } : {}),
         ...(input.notes !== undefined ? { notes: input.notes || null } : {}),
         ...(input.occurredAt !== undefined ? { occurredAt: new Date(input.occurredAt) } : {}),

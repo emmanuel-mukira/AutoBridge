@@ -59,9 +59,7 @@ export interface ClientSalesHistory {
 }
 
 export interface RevenueCoverageInput {
-  coverageStart: string;
-  coverageEnd: string;
-  evidenceSource: string;
+  confirmedComplete: true;
 }
 
 export const clientsApi = {

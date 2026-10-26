@@ -70,6 +70,8 @@ try {
   assert.equal(primaryPositive.data.explanation.status, "available");
   assert.equal(primaryPositive.data.explanation.explainer.class_label, "Won");
   assert.ok(primaryPositive.data.explanation.additivity_error <= 1e-6);
+  assert.equal(primaryPositive.data.explanation.top_factors.length, 3);
+  assert.deepEqual(primaryPositive.data.explanation.top_factors, [...primaryPositive.data.explanation.contributions].sort((left, right) => Math.abs(right.contribution) - Math.abs(left.contribution)).slice(0, 3));
   const primaryZero = await request(`/api/opportunities/${zero.id}/score`, "POST", {}, admin);
   assert.equal(primaryZero.response.status, 201);
   assert.equal(primaryZero.data.modelVariant, "PRIMARY");

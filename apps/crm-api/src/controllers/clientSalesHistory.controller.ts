@@ -24,11 +24,10 @@ export async function verifyCoverage(req: Request, res: Response, next: NextFunc
   const data = VerifyRevenueCoverageSchema.safeParse(req.body);
   if (!id.success || !data.success) return void res.status(400).json({ error: "Invalid revenue coverage evidence", details: data.success ? undefined : data.error.flatten().fieldErrors });
   try {
-    const result = await service.verifyCoverage(req.user!, id.data.id, data.data);
+    const result = await service.verifyCoverage(req.user!, id.data.id);
     if (!result) return void res.status(404).json({ error: "Client not found or access denied" });
     res.status(201).json(result);
   } catch (error) {
-    if (error instanceof Error && error.message === "FUTURE_COVERAGE") return void res.status(400).json({ error: "Coverage cannot end in the future" });
     if (error instanceof Error && error.message === "INCOMPLETE_WON_SALES") return void res.status(409).json({ error: "Complete confirmed values for all Won opportunities in this period before verifying coverage" });
     next(error);
   }

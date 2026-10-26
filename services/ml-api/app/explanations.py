@@ -72,6 +72,7 @@ class ShapExplanationAdapter:
             raise RuntimeError(f"SHAP additivity check failed: {error}")
         positive = sorted((item for item in contributions if item["contribution"] > 0), key=lambda item: item["contribution"], reverse=True)[:3]
         negative = sorted((item for item in contributions if item["contribution"] < 0), key=lambda item: item["contribution"])[:3]
+        top_factors = sorted(contributions, key=lambda item: abs(item["contribution"]), reverse=True)[:3]
         return {
             "status": "available",
             "output": "won_probability",
@@ -81,6 +82,7 @@ class ShapExplanationAdapter:
             "reconstructed_value": reconstructed,
             "additivity_error": error,
             "contributions": contributions,
+            "top_factors": top_factors,
             "top_positive": positive,
             "top_negative": negative,
             "explainer": {

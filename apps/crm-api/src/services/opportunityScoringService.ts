@@ -4,6 +4,7 @@ import { prisma } from "../client.js";
 import { convertMoneyToUsd, ILLUSTRATIVE_USD_KES_RATE } from "../domain/currency.js";
 import type { ClientActor } from "./clientService.js";
 import { ClientSalesHistoryService } from "./clientSalesHistoryService.js";
+import type { CreatePredictionReviewInput } from "../schemas/opportunity.schemas.js";
 
 const MODEL_VERSION = "automotive_v1";
 const ADAPTER_VERSION = "autobridge_automotive_v1";
@@ -23,7 +24,8 @@ const ExplanationSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("available"), output: z.literal("won_probability"), units: z.literal("probability"),
     baseline: z.number(), predicted_value: z.number().min(0).max(1), reconstructed_value: z.number(), additivity_error: z.number().nonnegative(),
-    contributions: z.array(ContributionSchema), top_positive: z.array(ContributionSchema), top_negative: z.array(ContributionSchema),
+    contributions: z.array(ContributionSchema), top_factors: z.array(ContributionSchema).length(3),
+    top_positive: z.array(ContributionSchema), top_negative: z.array(ContributionSchema),
     explainer: z.object({
       library: z.literal("shap"), version: z.string(), algorithm: z.literal("TreeExplainer"),
       feature_perturbation: z.literal("tree_path_dependent"), model_output: z.string(),
@@ -42,6 +44,10 @@ const MlResponseSchema = z.object({
   features: z.record(z.unknown()),
   explanation: ExplanationSchema,
 });
+
+const reviewInclude = {
+  reviewer: { select: { id: true, firstName: true, lastName: true, email: true, role: true } },
+} as const;
 
 function access(actor: ClientActor): Prisma.OpportunityWhereInput {
   return actor.role === "ADMIN" ? {} : { ownerId: actor.id, client: { ownerId: actor.id, deletedAt: null } };
@@ -130,7 +136,7 @@ export class OpportunityScoringService {
     const parsed = MlResponseSchema.safeParse(await response.json());
     if (!parsed.success || parsed.data.variant !== prepared.variant) throw new Error("ML_INVALID_RESPONSE");
 
-    return prisma.opportunityPrediction.create({
+    const prediction = await prisma.opportunityPrediction.create({
       data: {
         opportunityId: id,
         revenueSummaryId: prepared.history.revenueEvidence.coverage?.id ?? null,
@@ -143,12 +149,17 @@ export class OpportunityScoringService {
         explanation: parsed.data.explanation,
       },
     });
+    return { ...prediction, reviews: [] };
   }
 
   async history(actor: ClientActor, id: number) {
     const opportunity = await prisma.opportunity.findFirst({ where: { ...access(actor), id }, select: { id: true } });
     if (!opportunity) return null;
-    const predictions = await prisma.opportunityPrediction.findMany({ where: { opportunityId: id }, orderBy: [{ predictedAt: "desc" }, { id: "desc" }] });
+    const predictions = await prisma.opportunityPrediction.findMany({
+      where: { opportunityId: id },
+      include: { reviews: { include: reviewInclude, orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
+      orderBy: [{ predictedAt: "desc" }, { id: "desc" }],
+    });
     let stale = false;
     let staleReason: string | null = null;
     if (predictions[0]) {
@@ -165,5 +176,44 @@ export class OpportunityScoringService {
     }
     const rows = predictions.map((prediction) => ({ ...prediction, wonProbability: prediction.wonProbability.toString() }));
     return { latest: rows[0] ? { ...rows[0], stale, staleReason } : null, history: rows };
+  }
+
+  private async accessiblePrediction(actor: ClientActor, opportunityId: number, predictionId: number) {
+    return prisma.opportunityPrediction.findFirst({
+      where: { id: predictionId, opportunityId, opportunity: { ...access(actor) } },
+      select: { id: true },
+    });
+  }
+
+  async reviews(actor: ClientActor, opportunityId: number, predictionId: number) {
+    if (!await this.accessiblePrediction(actor, opportunityId, predictionId)) return null;
+    return prisma.predictionReview.findMany({
+      where: { predictionId },
+      include: reviewInclude,
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    });
+  }
+
+  async review(actor: ClientActor, opportunityId: number, predictionId: number, input: CreatePredictionReviewInput) {
+    if (!await this.accessiblePrediction(actor, opportunityId, predictionId)) return null;
+    const existing = await prisma.predictionReview.findUnique({
+      where: { predictionId_reviewerId: { predictionId, reviewerId: actor.id } },
+      select: { id: true },
+    });
+    if (existing) throw new Error("REVIEW_EXISTS");
+    try {
+      return await prisma.predictionReview.create({
+        data: {
+          predictionId,
+          reviewerId: actor.id,
+          assessment: input.assessment,
+          comment: input.comment || null,
+        },
+        include: reviewInclude,
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") throw new Error("REVIEW_EXISTS");
+      throw error;
+    }
   }
 }

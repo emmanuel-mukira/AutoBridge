@@ -4,12 +4,16 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 
 from .contracts import PredictionRequest, PredictionResponse
 from .explanations import ShapExplanationAdapter
 from .predictor import PredictionAdapter
 from .registry import ModelRegistry
+
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 
 def artifact_directory() -> Path:

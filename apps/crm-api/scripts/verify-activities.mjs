@@ -63,6 +63,7 @@ try {
   const noCsrf = await fetch(`${base}/api/interactions`, { method: "POST", headers: { Cookie: rep.cookie, Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify(interactionInput) });
   assert.equal(noCsrf.status, 403);
   assert.equal((await request("/api/interactions", "POST", { ...interactionInput, occurredAt: "invalid" }, rep)).response.status, 400);
+  assert.equal((await request("/api/interactions", "POST", { ...interactionInput, opportunityId: undefined }, rep)).response.status, 400);
   assert.equal((await request("/api/interactions", "POST", { ...interactionInput, opportunityId: otherOpportunityResult.data.id }, rep)).response.status, 400);
   const interaction = await request("/api/interactions", "POST", interactionInput, rep);
   assert.equal(interaction.response.status, 201);
@@ -73,13 +74,15 @@ try {
   assert.equal((await request(`/api/interactions/${interaction.data.id}`, "GET", undefined, otherRep)).response.status, 404);
   assert.equal((await request(`/api/interactions/${interaction.data.id}`, "PATCH", { notes: "Updated discussion notes" }, rep)).data.notes, "Updated discussion notes");
 
-  const adminInteraction = await request("/api/interactions", "POST", { ...interactionInput, opportunityId: null, interactionType: "EMAIL", occurredAt: new Date(Date.now() + 1000).toISOString() }, admin);
+  assert.equal((await request(`/api/opportunities/${opportunityResult.data.id}/stage`, "PATCH", { stage: "CLOSED", outcome: "LOST" }, rep)).response.status, 200);
+  const adminInteraction = await request("/api/interactions", "POST", { ...interactionInput, interactionType: "EMAIL", occurredAt: new Date(Date.now() + 1000).toISOString() }, admin);
   assert.equal(adminInteraction.response.status, 201);
   created.interactions.push(adminInteraction.data.id);
   assert.equal((await request(`/api/interactions/${adminInteraction.data.id}`, "GET", undefined, rep)).response.status, 200);
   assert.equal((await request(`/api/interactions/${adminInteraction.data.id}`, "PATCH", { notes: "Denied" }, rep)).response.status, 404);
 
   const followUpInput = { clientId: clientResult.data.id, opportunityId: opportunityResult.data.id, title: "Send revised quote", channel: "EMAIL", dueAt: new Date(Date.now() + 86_400_000).toISOString() };
+  assert.equal((await request("/api/follow-ups", "POST", { ...followUpInput, opportunityId: undefined }, rep)).response.status, 400);
   assert.equal((await request("/api/follow-ups", "POST", { ...followUpInput, channel: "SMS" }, rep)).response.status, 400);
   assert.equal((await request("/api/follow-ups", "POST", { ...followUpInput, title: "" }, rep)).response.status, 400);
   assert.equal((await request("/api/follow-ups", "POST", { ...followUpInput, ownerId: otherRep.user.id }, rep)).response.status, 403);
@@ -105,9 +108,12 @@ try {
 
   assert.ok(await prisma.interaction.findUnique({ where: { id: interaction.data.id } }));
   assert.ok((await prisma.followUp.findUnique({ where: { id: followUp.data.id } }))?.completedAt);
+  const legacyInteraction = await prisma.interaction.create({ data: { clientId: clientResult.data.id, opportunityId: null, userId: rep.user.id, interactionType: "CALL", occurredAt: new Date() } });
+  created.interactions.push(legacyInteraction.id);
+  assert.equal((await request(`/api/interactions?clientId=${clientResult.data.id}`, "GET", undefined, rep)).data.interactions.some((item) => item.id === legacyInteraction.id), true);
   assert.equal((await request(`/api/interactions/${interaction.data.id}`, "DELETE", undefined, rep)).response.status, 204);
   created.interactions = created.interactions.filter((id) => id !== interaction.data.id);
-  console.log("PASS: activity auth, CSRF, validation, client/opportunity relationships, ownership, persistence, rescheduling and completion");
+  console.log("PASS: required opportunity links, open/resolved associations, legacy preservation, auth, ownership, persistence, rescheduling and completion");
 } finally {
   await prisma.followUp.deleteMany({ where: { id: { in: created.followUps } } });
   await prisma.interaction.deleteMany({ where: { id: { in: created.interactions } } });

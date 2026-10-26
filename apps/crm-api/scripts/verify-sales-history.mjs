@@ -72,7 +72,7 @@ try {
   assert.equal((await request(`/api/opportunities/${lost.id}/stage`, "PATCH", { stage: "CLOSED", outcome: "LOST" }, owner)).response.status, 200);
 
   assert.equal((await request(`/api/clients/${clientId}/sales-history`, "GET", undefined, outsider)).response.status, 404);
-  assert.equal((await request(`/api/clients/${clientId}/revenue-coverage`, "POST", { coverageStart: "2024-01-01T00:00:00.000Z", coverageEnd: new Date().toISOString(), evidenceSource: "Unauthorized test" }, outsider)).response.status, 404);
+  assert.equal((await request(`/api/clients/${clientId}/revenue-coverage`, "POST", { confirmedComplete: true }, outsider)).response.status, 404);
   assert.equal((await request(`/api/opportunities/${won.id}/confirmed-sale`, "PATCH", { confirmedAmount: "1", confirmedCurrency: "USD" }, outsider)).response.status, 404);
 
   const asOf = new Date(Date.now() - 1);
@@ -102,16 +102,22 @@ try {
 
   const zeroClient = await request("/api/clients", "POST", { businessName: `Verified Zero Client ${suffix}`, countyName: "Nairobi", locationAddress: "Zero Road" }, owner);
   created.clients.push(zeroClient.data.id);
-  const coverageEnd = new Date();
-  const coverageStart = new Date(coverageEnd); coverageStart.setUTCFullYear(coverageStart.getUTCFullYear() - 2); coverageStart.setUTCDate(coverageStart.getUTCDate() - 1);
-  const zeroCoverage = await request(`/api/clients/${zeroClient.data.id}/revenue-coverage`, "POST", { coverageStart: coverageStart.toISOString(), coverageEnd: coverageEnd.toISOString(), evidenceSource: "Complete synthetic test records" }, owner);
+  const unknownHistory = await request(`/api/clients/${zeroClient.data.id}/sales-history`, "GET", undefined, owner);
+  assert.equal(unknownHistory.data.revenueEvidence.state, "UNKNOWN");
+  assert.equal(unknownHistory.data.revenueEvidence.ibmRevenueCode, null);
+  const beforeVerification = Date.now();
+  const zeroCoverage = await request(`/api/clients/${zeroClient.data.id}/revenue-coverage`, "POST", { confirmedComplete: true }, owner);
   assert.equal(zeroCoverage.response.status, 201);
   created.summaries.push(zeroCoverage.data.id);
+  assert.equal(zeroCoverage.data.evidenceSource, "User confirmed complete sales history in AutoBridge");
+  assert.ok(Math.abs(new Date(zeroCoverage.data.coverageEnd).getTime() - beforeVerification) < 10_000);
+  const expectedStart = new Date(zeroCoverage.data.coverageEnd); expectedStart.setUTCFullYear(expectedStart.getUTCFullYear() - 2);
+  assert.equal(new Date(zeroCoverage.data.coverageStart).toISOString(), expectedStart.toISOString());
   const zeroHistory = await request(`/api/clients/${zeroClient.data.id}/sales-history`, "GET", undefined, owner);
   assert.equal(zeroHistory.data.revenueEvidence.state, "VERIFIED_ZERO");
   assert.equal(zeroHistory.data.revenueEvidence.ibmRevenueCode, 0);
 
-  console.log("PASS: confirmed Won values, exclusion of Lost/open/missing values, conversion, two-year boundary, verified zero, unknown/ownership rules, and corrections");
+  console.log("PASS: automatic two-year coverage, confirmed Won values, verified zero, unknown/ownership rules, and corrections");
 } finally {
   await prisma.clientRevenueSummary.deleteMany({ where: { id: { in: created.summaries } } });
   await prisma.opportunity.deleteMany({ where: { id: { in: created.opportunities } } });

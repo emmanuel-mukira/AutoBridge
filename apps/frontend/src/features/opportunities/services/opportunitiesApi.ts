@@ -60,6 +60,7 @@ export interface OpportunityFilters {
   productGroupId?: number;
   productSubgroupId?: number;
   routeToMarket?: SalesRoute;
+  limit?: number;
 }
 
 export interface ConfirmedSaleInput {
@@ -98,10 +99,23 @@ export type PredictionExplanation = {
   reconstructed_value: number;
   additivity_error: number;
   contributions: PredictionContribution[];
+  top_factors?: PredictionContribution[];
   top_positive: PredictionContribution[];
   top_negative: PredictionContribution[];
   explainer: { library: "shap"; version: string; algorithm: "TreeExplainer"; feature_perturbation: string; model_output: string; class_index: 1; class_label: "Won" };
 } | { status: "unavailable"; reason: string };
+
+export type PredictionAssessment = "REASONABLE" | "OVERESTIMATED" | "UNDERESTIMATED";
+
+export interface PredictionReview {
+  id: number;
+  predictionId: number;
+  reviewerId: number;
+  assessment: PredictionAssessment;
+  comment: string | null;
+  createdAt: string;
+  reviewer: OpportunityOwner;
+}
 
 export interface OpportunityPrediction {
   id: number;
@@ -114,6 +128,7 @@ export interface OpportunityPrediction {
   inputSnapshot: Record<string, unknown>;
   conversionSnapshot: Record<string, unknown>;
   explanation: PredictionExplanation | null;
+  reviews: PredictionReview[];
 }
 
 export interface PredictionHistory {
@@ -130,6 +145,8 @@ export const opportunitiesApi = {
   correctConfirmedSale: async (id: number, input: ConfirmedSaleInput) => (await http.patch<Opportunity>(`/api/opportunities/${id}/confirmed-sale`, input)).data,
   score: async (id: number) => (await http.post<OpportunityPrediction>(`/api/opportunities/${id}/score`)).data,
   predictions: async (id: number) => (await http.get<PredictionHistory>(`/api/opportunities/${id}/predictions`)).data,
+  reviewPrediction: async (opportunityId: number, predictionId: number, input: { assessment: PredictionAssessment; comment?: string }) =>
+    (await http.post<PredictionReview>(`/api/opportunities/${opportunityId}/predictions/${predictionId}/reviews`, input)).data,
   products: async () => (await http.get<{ productGroups: ProductGroup[] }>("/api/opportunities/products")).data.productGroups,
   owners: async () => (await http.get<{ owners: OpportunityOwner[] }>("/api/opportunities/owners")).data.owners,
 };
