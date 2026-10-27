@@ -1,0 +1,103 @@
+enum OpportunityStage {
+  NEW
+  QUALIFYING
+  PROPOSAL
+  NEGOTIATION
+  CLOSED
+}
+
+enum OpportunityOutcome {
+  WON
+  LOST
+}
+
+enum SalesRoute {
+  FIELDS_SALES
+  OTHER
+  RESELLER
+  TELECOVERAGE
+  TELESALES
+}
+
+enum PredictionModelVariant {
+  PRIMARY
+  LIMITED_HISTORY
+}
+
+enum PredictionAssessment {
+  REASONABLE
+  OVERESTIMATED
+  UNDERESTIMATED
+}
+
+model Opportunity {
+  id                        Int                 @id @default(autoincrement())
+  clientId                  Int
+  ownerId                   Int
+  productSubgroupId         Int?
+  title                     String
+  estimatedAmount           Decimal             @db.Decimal(18, 2)
+  currency                  String              @db.VarChar(3)
+  routeToMarket             SalesRoute?
+  stage                     OpportunityStage    @default(NEW)
+  outcome                   OpportunityOutcome?
+  outcomeAt                 DateTime?
+  confirmedAmount           Decimal?            @db.Decimal(18, 2)
+  confirmedCurrency         String?             @db.VarChar(3)
+  confirmedAmountUsd        Decimal?            @db.Decimal(18, 6)
+  confirmedQuoteUnitsPerUsd Decimal?            @db.Decimal(18, 6)
+  confirmedRateSource       String?
+  confirmedRateObservedAt   DateTime?
+  confirmedAt               DateTime?
+  estimatedCloseAt          DateTime?
+  estimatedAt               DateTime            @default(now())
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+
+  client          Client                  @relation(fields: [clientId], references: [id])
+  owner           User                    @relation("OpportunityOwner", fields: [ownerId], references: [id])
+  productSubgroup ProductSubgroup?        @relation(fields: [productSubgroupId], references: [id])
+  interactions    Interaction[]
+  followUps       FollowUp[]
+  predictions     OpportunityPrediction[]
+  quotations      Quotation[]
+
+  @@index([stage, outcome])
+  @@index([clientId])
+  @@index([clientId, outcome, outcomeAt])
+}
+
+model OpportunityPrediction {
+  id                 Int                    @id @default(autoincrement())
+  opportunityId      Int
+  revenueSummaryId   Int?
+  modelVersion       String
+  adapterVersion     String
+  modelVariant       PredictionModelVariant
+  inputSnapshot      Json
+  conversionSnapshot Json
+  wonProbability     Decimal                @db.Decimal(7, 6)
+  explanation        Json?
+  predictedAt        DateTime               @default(now())
+
+  opportunity    Opportunity           @relation(fields: [opportunityId], references: [id])
+  revenueSummary ClientRevenueSummary? @relation(fields: [revenueSummaryId], references: [id], onDelete: Restrict)
+  reviews        PredictionReview[]
+
+  @@index([opportunityId, predictedAt])
+}
+
+model PredictionReview {
+  id           Int                  @id @default(autoincrement())
+  predictionId Int
+  reviewerId   Int
+  assessment   PredictionAssessment
+  comment      String?
+  createdAt    DateTime             @default(now())
+
+  prediction OpportunityPrediction @relation(fields: [predictionId], references: [id])
+  reviewer   User                  @relation(fields: [reviewerId], references: [id])
+
+  @@unique([predictionId, reviewerId])
+  @@index([predictionId, createdAt])
+}

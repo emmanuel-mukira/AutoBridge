@@ -1,0 +1,34 @@
+model Interaction {
+  id              Int      @id @default(autoincrement())
+  clientId        Int
+  opportunityId   Int?
+  userId          Int
+  interactionType String
+  notes           String?
+  occurredAt      DateTime
+  createdAt       DateTime @default(now())
+
+  client      Client       @relation(fields: [clientId], references: [id])
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
+
+  @@index([clientId, occurredAt])
+}
+
+model FollowUp {
+  id            Int       @id @default(autoincrement())
+  clientId      Int
+  opportunityId Int?
+  ownerId       Int
+  title         String
+  channel       String?
+  dueAt         DateTime
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  client      Client       @relation(fields: [clientId], references: [id])
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id])
+  owner       User         @relation(fields: [ownerId], references: [id])
+
+  @@index([ownerId, dueAt])
+}
