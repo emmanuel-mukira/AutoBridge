@@ -75,7 +75,22 @@ export const ListQuotationsSchema = z
     to: z.coerce.date().optional(),
   })
   .strict();
+export const ListQuotationSeriesSchema = z
+  .object({
+    clientId: z.coerce.number().int().positive().optional(),
+    ownerId: z.coerce.number().int().positive().optional(),
+    status: z.enum(["DRAFT", "SENT", "ACCEPTED", "REJECTED"]).optional(),
+    search: z.string().trim().max(100).optional(),
+    from: z.coerce.date().optional(),
+    to: z.coerce.date().optional(),
+    page: z.coerce.number().int().positive().default(1),
+    limit: z.coerce.number().int().positive().max(100).default(20),
+  })
+  .strict();
 
 export type QuotationDraftInput = z.infer<typeof DraftFieldsSchema>;
 export type ListQuotationsInput = z.infer<typeof ListQuotationsSchema>;
+export type ListQuotationSeriesInput = z.infer<
+  typeof ListQuotationSeriesSchema
+>;
 export type QuotationStatusInput = z.infer<typeof QuotationStatusSchema>;

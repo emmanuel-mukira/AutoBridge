@@ -196,10 +196,7 @@ export default function OpportunityDetails() {
             </CardContent>
           </Card>
           <OpportunityPredictionCard opportunity={opportunity} />
-          <QuotationSection
-            opportunityId={opportunity.id}
-            clientId={opportunity.clientId}
-          />
+          <QuotationSection opportunity={opportunity} />
           <ActivitySection
             clientId={opportunity.clientId}
             opportunityId={opportunity.id}

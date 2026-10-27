@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { formatMoney, type DisplayCurrency } from "@/lib/currency";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CalendarDays, Pencil } from "lucide-react";
 import type { Opportunity, OpportunityStage } from "../services/opportunitiesApi";
 import { opportunityStageClass, opportunityStageLabels } from "../utils/labels";
@@ -69,6 +70,31 @@ export function OpportunityKanbanBoard({ opportunities, displayCurrency, onEdit,
                 <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" />{opportunity.estimatedCloseAt ? new Date(opportunity.estimatedCloseAt).toLocaleDateString() : "No close date"}</span>
                   <Avatar className="h-7 w-7"><AvatarFallback className="text-[10px]">{opportunity.owner.firstName[0]}{opportunity.owner.lastName[0]}</AvatarFallback></Avatar>
+                </div>
+                <div onPointerDown={(event) => event.stopPropagation()}>
+                  <Select
+                    value={opportunity.stage}
+                    onValueChange={(value) =>
+                      onStageDrop(
+                        opportunities.find((item) => item.id === opportunity.opportunityId)!,
+                        value as OpportunityStage,
+                      )
+                    }
+                    disabled={opportunity.stage === "CLOSED" || movingId !== undefined}
+                  >
+                    <SelectTrigger className="h-8 w-full text-xs" aria-label={`Move ${opportunity.title} to stage`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {columns
+                        .slice(columns.findIndex((column) => column.id === opportunity.stage))
+                        .map((stage) => (
+                          <SelectItem key={stage.id} value={stage.id}>
+                            {stage.id === opportunity.stage ? `Current: ${stage.name}` : `Move to ${stage.name}`}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <Button className="w-full" size="sm" variant="outline" onPointerDown={(event) => event.stopPropagation()} onClick={() => onEdit(opportunities.find((item) => item.id === opportunity.opportunityId)!)}><Pencil className="mr-2 h-3.5 w-3.5" />Edit details</Button>
               </div>

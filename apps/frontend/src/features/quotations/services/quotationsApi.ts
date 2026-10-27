@@ -105,6 +105,27 @@ export interface Quotation {
   } | null;
 }
 
+export interface QuotationSeries {
+  id: number;
+  quoteNumber: string;
+  opportunityId: number;
+  version: number;
+  status: Exclude<QuotationStatus, "SUPERSEDED">;
+  currency: "KES";
+  issueDate: string | null;
+  validUntil: string;
+  totalAmount: string;
+  createdAt: string;
+  versionCount: number;
+  client: { id: number; businessName: string };
+  opportunity: {
+    id: number;
+    title: string;
+    ownerId: number;
+    owner: { id: number; firstName: string; lastName: string };
+  };
+}
+
 export interface QuotationDraftInput {
   contactId?: number | null;
   validUntil: string;
@@ -123,6 +144,25 @@ export type QuotationFilters = {
   from?: string;
   to?: string;
 };
+
+export type QuotationSeriesFilters = Omit<
+  QuotationFilters,
+  "opportunityId" | "status"
+> & {
+  status?: Exclude<QuotationStatus, "SUPERSEDED">;
+  page?: number;
+  limit?: number;
+};
+
+export interface QuotationSeriesResponse {
+  series: QuotationSeries[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
 
 export const quotationsApi = {
   products: async (
@@ -144,6 +184,12 @@ export const quotationsApi = {
         params: filters,
       })
     ).data.quotations,
+  listSeries: async (filters: QuotationSeriesFilters = {}) =>
+    (
+      await http.get<QuotationSeriesResponse>("/api/quotations/series", {
+        params: filters,
+      })
+    ).data,
   getById: async (id: number) =>
     (await http.get<Quotation>(`/api/quotations/${id}`)).data,
   update: async (id: number, input: QuotationDraftInput) =>

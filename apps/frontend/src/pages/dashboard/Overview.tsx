@@ -1,10 +1,9 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Activity, AlertCircle, BriefcaseBusiness, CalendarCheck, CalendarClock, CircleDollarSign, Clock3, Target, Trophy } from "lucide-react";
 import { useAuth } from "@/app/auth/useAuth";
 import { useUIStore } from "@/app/store";
 import { StatusDistributionChart } from "@/components/dashboard/charts/StatusDistributionChart";
-import { ProductLineDistributionChart } from "@/components/dashboard/charts/ProductLineDistributionChart";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +20,32 @@ import { opportunityStageClass, opportunityStageLabels, salesRouteLabels } from 
 import { formatMoney } from "@/lib/currency";
 
 const stages: OpportunityStage[] = ["NEW", "QUALIFYING", "PROPOSAL", "NEGOTIATION", "CLOSED"];
+
+function WinRateBreakdown({
+  title,
+  description,
+  rows,
+}: {
+  title: string;
+  description: string;
+  rows: { key: string | number; label: string; won: number; lost: number; resolved: number; winRate: number | null }[];
+}) {
+  return (
+    <Card className="h-full">
+      <CardHeader><CardTitle className="text-base">{title}</CardTitle><CardDescription>{description}</CardDescription></CardHeader>
+      <CardContent>
+        {rows.length === 0 ? <p className="text-sm text-muted-foreground">No resolved opportunities in this period.</p> : (
+          <div className="space-y-3">{rows.map((row) => (
+            <div key={row.key} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b pb-3 last:border-0 last:pb-0">
+              <div className="min-w-0"><p className="truncate text-sm font-medium">{row.label}</p><p className="text-xs text-muted-foreground">{row.won} Won · {row.lost} Lost · {row.resolved} resolved</p></div>
+              <span className="text-sm font-semibold tabular-nums">{row.winRate === null ? "—" : `${row.winRate}%`}</span>
+            </div>
+          ))}</div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 function OpportunityTable({ title, description, opportunities }: { title: string; description: string; opportunities: AnalyticsOpportunity[] }) {
   return (
@@ -59,10 +84,7 @@ export default function Overview() {
   const products = useOpportunityProducts();
   const data = analytics.data;
 
-  const routeData = useMemo(() => (data?.distributions.byRoute ?? []).filter((item) => item.count > 0), [data]);
-  const maxRouteCount = Math.max(1, ...routeData.map((item) => item.count));
-
-  if (analytics.isLoading) return <div className="space-y-5"><Skeleton className="h-20 w-full" /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-32" />)}</div><Skeleton className="h-96" /></div>;
+  if (analytics.isLoading) return <div className="space-y-5"><Skeleton className="h-20 w-full" /><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-32" />)}</div><Skeleton className="h-96" /></div>;
   if (analytics.isError || !data) return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Dashboard unavailable</AlertTitle><AlertDescription>{analytics.error instanceof Error ? analytics.error.message : "Unable to load operational analytics."}</AlertDescription></Alert>;
 
   const pipelineValue = formatMoney(Number(data.summary.openPipelineValueUsd), "USD", displayCurrency, Number(data.currencyBasis.kesPerUsd));
@@ -79,28 +101,25 @@ export default function Overview() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+        <MetricCard title="Open pipeline value" value={pipelineValue} description="Current authorized open pipeline" icon={CircleDollarSign} />
         <MetricCard title="Total opportunities" value={data.summary.totalOpportunities} description="Created in the selected period" icon={BriefcaseBusiness} />
-        <MetricCard title="Open opportunities" value={data.summary.openOpportunities} description="No final Won or Lost outcome" icon={Target} />
-        <MetricCard title="Won opportunities" value={data.summary.wonOpportunities} description="Resolved as Won" icon={Trophy} />
-        <MetricCard title="Opportunity win rate" value={data.summary.winRate === null ? "No resolved data" : `${data.summary.winRate}%`} description="Won divided by Won plus Lost" icon={CircleDollarSign} />
-        <MetricCard title="Open pipeline value" value={pipelineValue} description={`Converted using ${data.currencyBasis.source}`} icon={CircleDollarSign} />
+        <MetricCard title="Open opportunities" value={data.summary.openOpportunities} description="Current open pipeline" icon={Target} />
+        <MetricCard title="Won opportunities" value={data.summary.wonOpportunities} description="Outcome recorded in selected period" icon={Trophy} />
+        <MetricCard title="Opportunity win rate" value={data.summary.winRate === null ? "No resolved data" : `${data.summary.winRate}%`} description="Outcomes in period: Won ÷ (Won + Lost)" icon={CircleDollarSign} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <StatusDistributionChart title="Opportunity outcome summary" data={data.distributions.byOutcome.filter((item) => item.count > 0).map((item) => ({ status: item.key, count: item.count }))} />
-        <ProductLineDistributionChart data={data.distributions.byProductGroup.filter((item) => item.count > 0).map((item) => ({ productLine: item.label, count: item.count }))} />
+        <StatusDistributionChart title="Opportunity outcome summary" description="Current open pipeline plus Won and Lost outcomes recorded in the selected period" data={data.distributions.byOutcome.filter((item) => item.count > 0).map((item) => ({ status: item.key, count: item.count }))} />
+        <WinRateBreakdown title="Product group performance" description="Resolved win rate by automotive product group" rows={data.distributions.byProductGroup.map((item) => ({ ...item, key: item.id ?? "unspecified" }))} />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader><CardTitle className="text-base">Opportunities by sales representative</CardTitle><CardDescription>Authorized opportunity count for the selected period</CardDescription></CardHeader>
-          <CardContent>{data.distributions.byOwner.length === 0 ? <p className="text-sm text-muted-foreground">No representative activity in this period.</p> : <div className="space-y-3">{data.distributions.byOwner.map((owner) => <div key={owner.id} className="flex items-center justify-between border-b pb-2 last:border-0"><span className="font-medium">{owner.label}</span><Badge variant="secondary">{owner.count}</Badge></div>)}</div>}</CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle className="text-base">Route-to-market breakdown</CardTitle><CardDescription>Opportunity volume by recorded sales route</CardDescription></CardHeader>
-          <CardContent>{routeData.length === 0 ? <p className="text-sm text-muted-foreground">No route data for this period.</p> : <div className="space-y-4">{routeData.map((route) => <div key={route.key}><div className="mb-1 flex justify-between text-sm"><span>{route.key === "UNSPECIFIED" ? "Unspecified" : salesRouteLabels[route.key as keyof typeof salesRouteLabels]}</span><span className="font-semibold">{route.count}</span></div><div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${(route.count / maxRouteCount) * 100}%` }} /></div></div>)}</div>}</CardContent>
-        </Card>
+      <div className={`grid gap-4 ${data.scope.isAdmin ? "xl:grid-cols-2" : ""}`}>
+        {data.scope.isAdmin && <Card className="overflow-hidden">
+          <CardHeader><CardTitle className="text-base">Sales representative performance</CardTitle><CardDescription>Resolved outcomes and confirmed Won value in the selected period</CardDescription></CardHeader>
+          <CardContent className="p-0">{data.distributions.byOwner.length === 0 ? <p className="px-6 pb-6 text-sm text-muted-foreground">No representative outcomes in this period.</p> : <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Representative</TableHead><TableHead>Won</TableHead><TableHead>Lost</TableHead><TableHead>Win rate</TableHead><TableHead>Confirmed Won value</TableHead></TableRow></TableHeader><TableBody>{data.distributions.byOwner.map((owner) => <TableRow key={owner.id}><TableCell className="font-medium">{owner.label}</TableCell><TableCell>{owner.won}</TableCell><TableCell>{owner.lost}</TableCell><TableCell>{owner.winRate === null ? "—" : `${owner.winRate}%`} <span className="text-xs text-muted-foreground">({owner.resolved})</span></TableCell><TableCell>{formatMoney(Number(owner.confirmedWonValueUsd), "USD", displayCurrency, Number(data.currencyBasis.kesPerUsd))}</TableCell></TableRow>)}</TableBody></Table></div>}</CardContent>
+        </Card>}
+        <WinRateBreakdown title="Route-to-market performance" description="Resolved win rate by recorded sales channel" rows={data.distributions.byRoute.map((item) => ({ ...item, label: item.key === "UNSPECIFIED" ? "Unspecified" : salesRouteLabels[item.key as keyof typeof salesRouteLabels] }))} />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

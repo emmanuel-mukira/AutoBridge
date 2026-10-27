@@ -14,9 +14,12 @@ import {
   useReviseQuotation,
   useUpdateQuotationStatus,
 } from "../hooks/useQuotations";
+import type { Opportunity } from "@/features/opportunities/services/opportunitiesApi";
 import type { Quotation } from "../services/quotationsApi";
 import { QuotationDialog } from "./QuotationDialog";
+import { QuotationOutcomePrompt } from "./QuotationOutcomePrompt";
 import { QuotationPrintButton } from "./QuotationPrintButton";
+import { QuotationSendAction } from "./QuotationSendAction";
 
 const money = (value: string) =>
   `KES ${Number(value).toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -29,12 +32,12 @@ const statusStyle: Record<Quotation["status"], string> = {
 };
 
 export function QuotationSection({
-  opportunityId,
-  clientId,
+  opportunity,
 }: {
-  opportunityId: number;
-  clientId: number;
+  opportunity: Opportunity;
 }) {
+  const opportunityId = opportunity.id;
+  const clientId = opportunity.clientId;
   const query = useOpportunityQuotations(opportunityId);
   const transition = useUpdateQuotationStatus(opportunityId);
   const revise = useReviseQuotation(opportunityId);
@@ -110,7 +113,7 @@ export function QuotationSection({
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {quotation.status === "DRAFT" && (
+                {quotation.status === "DRAFT" && opportunity.stage !== "CLOSED" && (
                   <>
                     <Button
                       size="sm"
@@ -120,18 +123,16 @@ export function QuotationSection({
                       <Pencil className="mr-2 h-4 w-4" />
                       Edit
                     </Button>
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        transition.mutate({ id: quotation.id, status: "SENT" })
-                      }
-                      disabled={transition.isPending}
-                    >
-                      Issue quotation
-                    </Button>
+                    <QuotationSendAction
+                      quotation={quotation}
+                      opportunity={opportunity}
+                      compact
+                    />
                   </>
                 )}
-                {quotation.status === "SENT" && (
+                {opportunity.stage === "NEGOTIATION" &&
+                  (quotation.status === "SENT" ||
+                    quotation.status === "REJECTED") && (
                   <>
                     <Button
                       size="sm"
@@ -142,36 +143,50 @@ export function QuotationSection({
                       <CopyPlus className="mr-2 h-4 w-4" />
                       Create revision
                     </Button>
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        transition.mutate({
-                          id: quotation.id,
-                          status: "ACCEPTED",
-                        })
-                      }
-                      disabled={transition.isPending}
-                    >
-                      Accept
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        transition.mutate({
-                          id: quotation.id,
-                          status: "REJECTED",
-                        })
-                      }
-                      disabled={transition.isPending}
-                    >
-                      Reject
-                    </Button>
+                    {quotation.status === "SENT" && (
+                      <>
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            transition.mutate({
+                              id: quotation.id,
+                              status: "ACCEPTED",
+                            })
+                          }
+                          disabled={transition.isPending}
+                        >
+                          Accept
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            transition.mutate({
+                              id: quotation.id,
+                              status: "REJECTED",
+                            })
+                          }
+                          disabled={transition.isPending}
+                        >
+                          Reject
+                        </Button>
+                      </>
+                    )}
                   </>
-                )}
+                  )}
                 <QuotationPrintButton quotation={quotation} />
               </div>
             </div>
+            {quotation.current &&
+              (quotation.status === "ACCEPTED" ||
+                quotation.status === "REJECTED") && (
+                <div className="mt-4">
+                  <QuotationOutcomePrompt
+                    quotation={quotation}
+                    opportunity={opportunity}
+                  />
+                </div>
+              )}
           </article>
         ))}
         <QuotationDialog

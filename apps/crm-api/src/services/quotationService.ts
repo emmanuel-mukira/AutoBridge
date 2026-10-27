@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../client.js";
 import type {
+  ListQuotationSeriesInput,
   ListQuotationsInput,
   QuotationDraftInput,
   QuotationStatusInput,
@@ -49,6 +50,18 @@ const detailInclude = {
   },
 } satisfies Prisma.QuotationInclude;
 
+const seriesInclude = {
+  opportunity: {
+    select: {
+      id: true,
+      title: true,
+      ownerId: true,
+      owner: { select: { id: true, firstName: true, lastName: true } },
+    },
+  },
+  client: { select: { id: true, businessName: true } },
+} satisfies Prisma.QuotationInclude;
+
 function access(actor: ClientActor): Prisma.QuotationWhereInput {
   return actor.role === "ADMIN"
     ? {}
@@ -61,6 +74,84 @@ function access(actor: ClientActor): Prisma.QuotationWhereInput {
 }
 
 export class QuotationService {
+  async listSeries(actor: ClientActor, filters: ListQuotationSeriesInput) {
+    const where: Prisma.QuotationWhereInput = {
+      ...access(actor),
+      current: true,
+      ...(filters.clientId ? { clientId: filters.clientId } : {}),
+      ...(filters.ownerId && actor.role === "ADMIN"
+        ? { opportunity: { ownerId: filters.ownerId } }
+        : {}),
+      ...(filters.status ? { status: filters.status } : {}),
+      ...(filters.search
+        ? {
+            OR: [
+              {
+                quoteNumber: {
+                  contains: filters.search,
+                  mode: "insensitive",
+                },
+              },
+              {
+                clientNameSnapshot: {
+                  contains: filters.search,
+                  mode: "insensitive",
+                },
+              },
+              {
+                opportunity: {
+                  title: { contains: filters.search, mode: "insensitive" },
+                },
+              },
+            ],
+          }
+        : {}),
+      ...(filters.from || filters.to
+        ? {
+            createdAt: {
+              ...(filters.from ? { gte: filters.from } : {}),
+              ...(filters.to ? { lte: filters.to } : {}),
+            },
+          }
+        : {}),
+    };
+    const [quotations, total] = await Promise.all([
+      prisma.quotation.findMany({
+        where,
+        include: seriesInclude,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip: (filters.page - 1) * filters.limit,
+        take: filters.limit,
+      }),
+      prisma.quotation.count({ where }),
+    ]);
+    const counts = quotations.length
+      ? await prisma.quotation.groupBy({
+          by: ["quoteNumber"],
+          where: {
+            ...access(actor),
+            quoteNumber: { in: quotations.map((item) => item.quoteNumber) },
+          },
+          _count: { _all: true },
+        })
+      : [];
+    const versionCounts = new Map(
+      counts.map((item) => [item.quoteNumber, item._count._all]),
+    );
+    return {
+      series: quotations.map((quotation) => ({
+        ...quotation,
+        versionCount: versionCounts.get(quotation.quoteNumber) ?? 1,
+      })),
+      pagination: {
+        page: filters.page,
+        limit: filters.limit,
+        total,
+        totalPages: Math.ceil(total / filters.limit),
+      },
+    };
+  }
+
   async list(actor: ClientActor, filters: ListQuotationsInput) {
     return prisma.quotation.findMany({
       where: {
@@ -215,7 +306,8 @@ export class QuotationService {
   async revise(actor: ClientActor, id: number) {
     const source = await this.getById(actor, id);
     if (!source) return null;
-    if (source.status !== "SENT") throw new Error("QUOTATION_NOT_REVISABLE");
+    if (source.status !== "SENT" && source.status !== "REJECTED")
+      throw new Error("QUOTATION_NOT_REVISABLE");
     try {
       return await prisma.$transaction(
         async (tx) => {

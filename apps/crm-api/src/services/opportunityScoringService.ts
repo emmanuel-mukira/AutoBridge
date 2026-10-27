@@ -8,7 +8,7 @@ import type { CreatePredictionReviewInput } from "../schemas/opportunity.schemas
 
 const MODEL_VERSION = "automotive_v1";
 const ADAPTER_VERSION = "autobridge_automotive_v1";
-const routeLabels = {
+export const scoringRouteLabels = {
   FIELDS_SALES: "Fields Sales",
   OTHER: "Other",
   RESELLER: "Reseller",
@@ -90,7 +90,7 @@ export class OpportunityScoringService {
     const features: Record<string, string | number> = {
       "Opportunity Amount USD": Number(conversion.modelReadyAmountUsd),
       ...(primary ? { "Revenue From Client Past Two Years": history.revenueEvidence.ibmRevenueCode! } : {}),
-      "Route To Market": routeLabels[opportunity.routeToMarket],
+      "Route To Market": scoringRouteLabels[opportunity.routeToMarket],
       "Supplies Group": opportunity.productSubgroup.productGroup.name,
       "Supplies Subgroup": opportunity.productSubgroup.name,
     };

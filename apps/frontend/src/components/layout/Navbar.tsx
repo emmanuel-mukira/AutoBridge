@@ -14,6 +14,7 @@ import { useEffect, useState, useCallback, memo } from "react";
 import { useAuth } from "@/app/auth/useAuth";
 import { SidebarLinks } from "./Sidebar";
 import { useUIActions, useUIStore } from "@/app/store";
+import { cn } from "@/lib/utils";
 
 function NavbarComponent() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
@@ -21,8 +22,23 @@ function NavbarComponent() {
   const navigate = useNavigate();
   const location = useLocation();
   const onDashboard = location.pathname.startsWith("/dashboard");
+  const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
   const displayCurrency = useUIStore((state) => state.displayCurrency);
   const { setDisplayCurrency } = useUIActions();
+  const [, , dashboardSection, dashboardDetail] = location.pathname.split("/");
+  const dashboardTitles: Record<string, string> = {
+    clients: "Clients",
+    opportunities: "Opportunities",
+    quotations: "Quotations",
+    products: "Products",
+    interactions: "Interactions",
+    "follow-ups": "Follow-ups",
+    "decision-support": "Decision Support",
+    settings: "Settings",
+  };
+  const dashboardPageTitle = dashboardSection
+    ? `${dashboardTitles[dashboardSection] ?? "Dashboard"}${dashboardDetail ? " / Details" : ""}`
+    : "Analytics Dashboard";
 
   useEffect(() => {
     const stored = localStorage.getItem("theme");
@@ -46,12 +62,18 @@ function NavbarComponent() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white dark:bg-gray-900">
-      <div className="flex h-16 items-center px-4 md:px-6 gap-4">
+      <div
+        className={cn(
+          "flex h-16 items-center gap-3 px-4 transition-[padding-left] duration-200 sm:pr-6",
+          onDashboard &&
+            (isSidebarOpen ? "sm:pl-[17.5rem]" : "sm:pl-20"),
+        )}
+      >
         {/* Mobile Menu */}
-        <div className="md:hidden mr-2">
+        <div className="sm:hidden">
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden">
+              <Button variant="ghost" size="icon" className="sm:hidden">
                 <Menu className="h-5 w-5" />
                 <span className="sr-only">Toggle menu</span>
               </Button>
@@ -96,6 +118,17 @@ function NavbarComponent() {
           </Link>
         )}
 
+        {onDashboard && (
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold sm:text-base">
+              {dashboardPageTitle}
+            </p>
+            <p className="hidden text-xs text-muted-foreground sm:block">
+              AutoBridge CRM
+            </p>
+          </div>
+        )}
+
         {/* Search Bar (Desktop) */}
         {/* <div className="hidden md:flex items-center flex-1 max-w-md ml-6">
           <div className="relative w-full">
@@ -109,7 +142,7 @@ function NavbarComponent() {
         </div> */}
 
         {/* Right Actions */}
-        <div className="flex items-center gap-2 ml-auto">
+        <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
           <Button
             variant="outline"
             size="sm"

@@ -93,10 +93,42 @@ try {
   assert.equal(Number(afterIssue.data.estimatedAmount), Number(savedV2.totalAmount));
   assert.equal((await request(`/api/quotations/${savedV1.id}`, "PATCH", draft, owner)).response.status, 409);
   assert.equal((await request(`/api/quotations/${savedV2.id}`, "GET", undefined, outsider)).response.status, 404);
-  assert.equal((await request(`/api/quotations/${savedV2.id}/status`, "PATCH", { status: "ACCEPTED" }, owner)).response.status, 200);
-  const unchangedOutcome = await request(`/api/opportunities/${opportunity.data.id}`, "GET", undefined, owner);
-  assert.equal(unchangedOutcome.data.outcome, null);
-  console.log("PASS: product-driven creation, server prices, mixed categories, V1 draft, discounts, revisions, supersession, amount synchronization, immutability, ownership, and acceptance isolation");
+  const series = await request(`/api/quotations/series?search=${encodeURIComponent(savedV2.quoteNumber)}&page=1&limit=20`, "GET", undefined, owner);
+  assert.equal(series.response.status, 200);
+  assert.equal(series.data.series.length, 1);
+  assert.equal(series.data.series[0].id, savedV2.id);
+  assert.equal(series.data.series[0].versionCount, 2);
+  assert.equal(series.data.series[0].status, "SENT");
+  assert.equal((await request(`/api/quotations/series?search=${encodeURIComponent(savedV2.quoteNumber)}&status=DRAFT`, "GET", undefined, owner)).data.series.length, 0);
+  assert.equal((await request(`/api/quotations/series?search=${encodeURIComponent(savedV2.quoteNumber)}`, "GET", undefined, outsider)).data.series.length, 0);
+  assert.equal((await request(`/api/quotations/series?search=${encodeURIComponent(savedV2.quoteNumber)}&ownerId=${owner.user.id}`, "GET", undefined, admin)).data.series.length, 1);
+
+  assert.equal((await request(`/api/quotations/${savedV2.id}/status`, "PATCH", { status: "REJECTED" }, owner)).response.status, 200);
+  assert.equal((await request(`/api/opportunities/${opportunity.data.id}`, "GET", undefined, owner)).data.outcome, null);
+  const rejectedRevision = await request(`/api/quotations/${savedV2.id}/revisions`, "POST", undefined, owner);
+  assert.equal(rejectedRevision.response.status, 201);
+  assert.equal(rejectedRevision.data.version, 3);
+  assert.equal(rejectedRevision.data.current, false);
+  const rejectedSeries = await request(`/api/quotations/series?search=${encodeURIComponent(savedV2.quoteNumber)}&status=REJECTED`, "GET", undefined, owner);
+  assert.equal(rejectedSeries.data.series[0].versionCount, 3);
+  assert.equal(rejectedSeries.data.series[0].id, savedV2.id);
+  const lost = await request(`/api/opportunities/${opportunity.data.id}/stage`, "PATCH", { stage: "CLOSED", outcome: "LOST" }, owner);
+  assert.equal(lost.response.status, 200);
+  assert.equal(lost.data.outcome, "LOST");
+
+  const acceptedOpportunity = await request("/api/opportunities", "POST", { ...input, title: `Accepted quotation ${suffix}` }, owner);
+  assert.equal(acceptedOpportunity.response.status, 201);
+  created.opportunityIds.push(acceptedOpportunity.data.id);
+  const acceptedHistory = await request(`/api/quotations?opportunityId=${acceptedOpportunity.data.id}`, "GET", undefined, owner);
+  const acceptedQuote = acceptedHistory.data.quotations[0];
+  assert.equal((await request(`/api/quotations/${acceptedQuote.id}/status`, "PATCH", { status: "SENT" }, owner)).response.status, 200);
+  assert.equal((await request(`/api/quotations/${acceptedQuote.id}/status`, "PATCH", { status: "ACCEPTED" }, owner)).response.status, 200);
+  assert.equal((await request(`/api/opportunities/${acceptedOpportunity.data.id}`, "GET", undefined, owner)).data.outcome, null);
+  const won = await request(`/api/opportunities/${acceptedOpportunity.data.id}/stage`, "PATCH", { stage: "CLOSED", outcome: "WON", confirmedAmount: acceptedQuote.totalAmount, confirmedCurrency: "KES" }, owner);
+  assert.equal(won.response.status, 200);
+  assert.equal(won.data.outcome, "WON");
+  assert.equal(Number(won.data.confirmedAmount), Number(acceptedQuote.totalAmount));
+  console.log("PASS: product pricing, immutable versions, series grouping, effective filters, ownership, rejected revisions, isolated quotation decisions, and explicit Won/Lost outcomes");
 } finally {
   await prisma.quotation.deleteMany({ where: { opportunityId: { in: created.opportunityIds } } });
   await prisma.opportunity.deleteMany({ where: { id: { in: created.opportunityIds } } });

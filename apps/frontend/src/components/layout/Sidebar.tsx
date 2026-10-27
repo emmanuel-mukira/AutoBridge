@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   FileText,
   PackageSearch,
+  BrainCircuit,
 } from "lucide-react";
 import { useAuth } from "@/app/auth/useAuth";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,7 @@ export const SidebarLinks = memo(function SidebarLinks({
 }: SidebarLinksProps) {
   const regularLinks = [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, end: true },
+    { to: "/dashboard/decision-support", label: "Decision Support", icon: BrainCircuit },
     { to: "/dashboard/clients", label: "Clients", icon: Building2 },
     {
       to: "/dashboard/opportunities",

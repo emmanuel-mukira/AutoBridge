@@ -4,11 +4,14 @@ import {
   quotationsApi,
   type QuotationDraftInput,
   type QuotationFilters,
+  type QuotationSeriesFilters,
 } from "../services/quotationsApi";
 
 const keys = {
   opportunity: (id: number) => ["quotations", "opportunity", id] as const,
   list: (filters: QuotationFilters) => ["quotations", "list", filters] as const,
+  series: (filters: QuotationSeriesFilters) =>
+    ["quotations", "series", filters] as const,
   detail: (id: number) => ["quotations", "detail", id] as const,
   products: (
     search: string,
@@ -44,6 +47,11 @@ export const useQuotations = (filters: QuotationFilters = {}) =>
   useQuery({
     queryKey: keys.list(filters),
     queryFn: () => quotationsApi.list(filters),
+  });
+export const useQuotationSeries = (filters: QuotationSeriesFilters = {}) =>
+  useQuery({
+    queryKey: keys.series(filters),
+    queryFn: () => quotationsApi.listSeries(filters),
   });
 export const useQuotation = (id: number) =>
   useQuery({
@@ -93,7 +101,7 @@ export function useReviseQuotation(opportunityId: number) {
     mutationFn: quotationsApi.revise,
     onSuccess: () => {
       client.invalidateQueries({ queryKey: keys.opportunity(opportunityId) });
-      client.invalidateQueries({ queryKey: keys.list({}) });
+      client.invalidateQueries({ queryKey: ["quotations"] });
       toast.success("Draft revision created");
     },
     onError: (error) => toast.error(error.message),

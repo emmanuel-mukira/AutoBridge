@@ -10,6 +10,7 @@ const Home = lazy(() => import("../pages/Home"));
 const Login = lazy(() => import("../pages/Login"));
 const Dashboard = lazy(() => import("../pages/Dashboard"));
 const DashboardOverview = lazy(() => import("../pages/dashboard/Overview"));
+const DecisionSupport = lazy(() => import("../pages/DecisionSupport"));
 const Clients = lazy(() => import("../pages/Clients"));
 const ClientDetails = lazy(() => import("../pages/ClientDetails"));
 const Opportunities = lazy(() => import("../pages/Opportunities"));
@@ -48,6 +49,7 @@ export const router = createBrowserRouter([
         ),
         children: [
           { index: true, element: loaded(<DashboardOverview />) },
+          { path: "decision-support", element: loaded(<DecisionSupport />) },
           { path: "clients", element: loaded(<Clients />) },
           { path: "clients/:id", element: loaded(<ClientDetails />) },
           { path: "opportunities", element: loaded(<Opportunities />) },

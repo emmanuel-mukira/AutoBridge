@@ -49,6 +49,42 @@ function sumUsd(rows: Array<{ confirmedAmountUsd: Prisma.Decimal | null }>) {
   return rows.reduce((total, row) => total.plus(row.confirmedAmountUsd ?? 0), new Prisma.Decimal(0));
 }
 
+export function deriveRevenueEvidenceState(input: {
+  coverage: {
+    complete: boolean;
+    declaration: "YES" | "NO" | "NOT_SURE";
+    coverageStart: Date;
+    coverageEnd: Date;
+    amount: Prisma.Decimal;
+  } | null;
+  windowStart: Date;
+  asOf: Date;
+  windowRevenueUsd: Prisma.Decimal;
+  windowMissingCount: number;
+}) {
+  const evidenceComplete = Boolean(
+    input.coverage?.complete
+    && input.coverage.declaration !== "NOT_SURE"
+    && input.coverage.coverageStart <= input.windowStart
+    && input.coverage.coverageEnd >= input.asOf
+    && input.windowMissingCount === 0
+    && input.coverage.amount.equals(input.windowRevenueUsd)
+    && (input.coverage.declaration === "NO" ? input.windowRevenueUsd.isZero() : !input.windowRevenueUsd.isZero()),
+  );
+  let ibmRevenueCode: 0 | 1 | 2 | 3 | 4 | null = null;
+  let reviewReason: string | null = null;
+  if (evidenceComplete) {
+    try { ibmRevenueCode = deriveIbmRevenueHistoryCode(input.windowRevenueUsd); }
+    catch (error) { reviewReason = error instanceof Error ? error.message : "Revenue evidence requires review"; }
+  }
+  return {
+    state: !evidenceComplete ? "UNKNOWN" as const : input.windowRevenueUsd.isZero() ? "VERIFIED_ZERO" as const : "VERIFIED_COMPLETE" as const,
+    amountUsd: evidenceComplete ? input.windowRevenueUsd.toString() : null,
+    ibmRevenueCode,
+    reviewReason,
+  };
+}
+
 export class ClientSalesHistoryService {
   private async findClient(actor: ClientActor, clientId: number) {
     return prisma.client.findFirst({
@@ -93,21 +129,7 @@ export class ClientSalesHistoryService {
     }
     const totalConfirmedUsd = sumUsd(confirmedSales);
     const windowRevenueUsd = sumUsd(windowConfirmedSales);
-    const evidenceComplete = Boolean(
-      coverage?.complete
-      && coverage.declaration !== "NOT_SURE"
-      && coverage.coverageStart <= windowStart
-      && coverage.coverageEnd >= asOf
-      && windowMissingCount === 0
-      && coverage.amount.equals(windowRevenueUsd)
-      && (coverage.declaration === "NO" ? windowRevenueUsd.isZero() : !windowRevenueUsd.isZero()),
-    );
-    let ibmRevenueCode: 0 | 1 | 2 | 3 | 4 | null = null;
-    let reviewReason: string | null = null;
-    if (evidenceComplete) {
-      try { ibmRevenueCode = deriveIbmRevenueHistoryCode(windowRevenueUsd); }
-      catch (error) { reviewReason = error instanceof Error ? error.message : "Revenue evidence requires review"; }
-    }
+    const evidence = deriveRevenueEvidenceState({ coverage, windowStart, asOf, windowRevenueUsd, windowMissingCount });
 
     return {
       client,
@@ -125,12 +147,12 @@ export class ClientSalesHistoryService {
         },
       },
       revenueEvidence: {
-        state: !evidenceComplete ? "UNKNOWN" : windowRevenueUsd.isZero() ? "VERIFIED_ZERO" : "VERIFIED_COMPLETE",
+        state: evidence.state,
         windowStart: windowStart.toISOString(),
         windowEnd: asOf.toISOString(),
-        amountUsd: evidenceComplete ? windowRevenueUsd.toString() : null,
-        ibmRevenueCode,
-        reviewReason,
+        amountUsd: evidence.amountUsd,
+        ibmRevenueCode: evidence.ibmRevenueCode,
+        reviewReason: evidence.reviewReason,
         missingConfirmedCount: windowMissingCount,
         coverage: coverage ? {
           id: coverage.id,
