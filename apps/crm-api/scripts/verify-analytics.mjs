@@ -8,6 +8,7 @@ const origin = process.env.FRONTEND_ORIGIN?.split(",")[0] || "http://127.0.0.1:5
 const suffix = randomUUID();
 const testStart = new Date(Date.now() - 1000).toISOString();
 const created = { users: [], clients: [], opportunities: [], interactions: [], followUps: [] };
+let catalogueProduct;
 
 async function request(path, method = "GET", body, session) {
   const response = await fetch(`${base}${path}`, {
@@ -43,7 +44,7 @@ async function createClient(session, businessName) {
 }
 
 async function createOpportunity(session, clientId, input) {
-  const result = await request("/api/opportunities", "POST", { clientId, title: `${input.title} ${suffix}`, estimatedAmount: input.amount, currency: input.currency, routeToMarket: input.route, productSubgroupId: input.productSubgroupId }, session);
+  const result = await request("/api/opportunities", "POST", { clientId, title: `${input.title} ${suffix}`, routeToMarket: input.route, productSubgroupId: catalogueProduct.productSubgroupId, items: [{ productId: catalogueProduct.id, quantity: input.quantity ?? "1" }] }, session);
   assert.equal(result.response.status, 201);
   created.opportunities.push(result.data.id);
   return result.data;
@@ -64,6 +65,7 @@ try {
   const emptyClient = await createClient(emptyRep, `Empty Analytics Client ${suffix}`);
   const products = await request("/api/opportunities/products", "GET", undefined, admin);
   const subgroup = products.data.productGroups[0].subgroups[0];
+  catalogueProduct = (await request(`/api/products?productSubgroupId=${subgroup.id}`, "GET", undefined, admin)).data.products[0];
 
   const kesOpen = await createOpportunity(rep, client.id, { title: "KES open", amount: "129000", currency: "KES", route: "RESELLER", productSubgroupId: subgroup.id });
   const usdOpen = await createOpportunity(rep, client.id, { title: "USD open", amount: "1000", currency: "USD", route: "FIELDS_SALES", productSubgroupId: subgroup.id });
@@ -95,7 +97,7 @@ try {
   assert.equal(repOverview.data.summary.wonOpportunities, 1);
   assert.equal(repOverview.data.summary.lostOpportunities, 0);
   assert.equal(repOverview.data.summary.winRate, 100);
-  assert.equal(repOverview.data.summary.openPipelineValueUsd, "2000.00");
+  assert.equal(repOverview.data.summary.openPipelineValueUsd, ((Number(kesOpen.estimatedAmount) + Number(usdOpen.estimatedAmount)) / 129).toFixed(2));
   assert.equal(repOverview.data.activities.interactionsRecorded, 1);
   assert.equal(repOverview.data.activities.upcomingFollowUps, 1);
   assert.equal(repOverview.data.activities.overdueFollowUps, 1);
@@ -129,6 +131,7 @@ try {
 } finally {
   await prisma.followUp.deleteMany({ where: { id: { in: created.followUps } } });
   await prisma.interaction.deleteMany({ where: { id: { in: created.interactions } } });
+  await prisma.quotation.deleteMany({ where: { opportunityId: { in: created.opportunities } } });
   await prisma.opportunity.deleteMany({ where: { id: { in: created.opportunities } } });
   await prisma.client.deleteMany({ where: { id: { in: created.clients } } });
   await prisma.user.deleteMany({ where: { id: { in: created.users } } });

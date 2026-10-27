@@ -52,10 +52,12 @@ try {
   assert.equal(otherClientResult.response.status, 201);
   created.clients.push(otherClientResult.data.id);
 
-  const opportunityResult = await request("/api/opportunities", "POST", { clientId: clientResult.data.id, ownerId: rep.user.id, title: `Activity Opportunity ${suffix}`, estimatedAmount: "100000", currency: "KES" }, rep);
+  const catalogue = await request("/api/products", "GET", undefined, rep);
+  const product = catalogue.data.products[0];
+  const opportunityResult = await request("/api/opportunities", "POST", { clientId: clientResult.data.id, ownerId: rep.user.id, productSubgroupId: product.productSubgroupId, title: `Activity Opportunity ${suffix}`, routeToMarket: "FIELDS_SALES", items: [{ productId: product.id, quantity: "2" }] }, rep);
   assert.equal(opportunityResult.response.status, 201);
   created.opportunities.push(opportunityResult.data.id);
-  const otherOpportunityResult = await request("/api/opportunities", "POST", { clientId: otherClientResult.data.id, ownerId: otherRep.user.id, title: `Other Opportunity ${suffix}`, estimatedAmount: "200000", currency: "KES" }, otherRep);
+  const otherOpportunityResult = await request("/api/opportunities", "POST", { clientId: otherClientResult.data.id, ownerId: otherRep.user.id, productSubgroupId: product.productSubgroupId, title: `Other Opportunity ${suffix}`, routeToMarket: "RESELLER", items: [{ productId: product.id, quantity: "3" }] }, otherRep);
   assert.equal(otherOpportunityResult.response.status, 201);
   created.opportunities.push(otherOpportunityResult.data.id);
 
@@ -117,6 +119,7 @@ try {
 } finally {
   await prisma.followUp.deleteMany({ where: { id: { in: created.followUps } } });
   await prisma.interaction.deleteMany({ where: { id: { in: created.interactions } } });
+  await prisma.quotation.deleteMany({ where: { opportunityId: { in: created.opportunities } } });
   await prisma.opportunity.deleteMany({ where: { id: { in: created.opportunities } } });
   await prisma.client.deleteMany({ where: { id: { in: created.clients } } });
   await prisma.user.deleteMany({ where: { id: { in: created.users } } });

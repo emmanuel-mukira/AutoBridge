@@ -139,7 +139,10 @@ export class OpportunityScoringService {
     const prediction = await prisma.opportunityPrediction.create({
       data: {
         opportunityId: id,
-        revenueSummaryId: prepared.history.revenueEvidence.coverage?.id ?? null,
+        revenueSummaryId:
+          prepared.variant === "PRIMARY"
+            ? (prepared.history.revenueEvidence.coverage?.id ?? null)
+            : null,
         modelVersion: MODEL_VERSION,
         adapterVersion: ADAPTER_VERSION,
         modelVariant: prepared.variant,

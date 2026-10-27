@@ -5,7 +5,12 @@ export const ClientSalesHistoryQuerySchema = z.object({
 });
 
 export const VerifyRevenueCoverageSchema = z.object({
-  confirmedComplete: z.literal(true),
-}).strict();
+  declaration: z.enum(["YES", "NO", "NOT_SURE"]),
+  confirmedComplete: z.boolean().optional(),
+}).strict().superRefine((value, context) => {
+  if (value.declaration === "YES" && value.confirmedComplete !== true) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["confirmedComplete"], message: "Confirm that the recorded purchases are complete" });
+  }
+});
 
 export type VerifyRevenueCoverageInput = z.infer<typeof VerifyRevenueCoverageSchema>;

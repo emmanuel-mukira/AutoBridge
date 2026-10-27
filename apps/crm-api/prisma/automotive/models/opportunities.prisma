@@ -31,28 +31,28 @@ enum PredictionAssessment {
 }
 
 model Opportunity {
-  id                Int                 @id @default(autoincrement())
-  clientId          Int
-  ownerId           Int
-  productSubgroupId Int?
-  title             String
-  estimatedAmount   Decimal             @db.Decimal(18, 2)
-  currency          String              @db.VarChar(3)
-  routeToMarket     SalesRoute?
-  stage             OpportunityStage    @default(NEW)
-  outcome           OpportunityOutcome?
-  outcomeAt         DateTime?
-  confirmedAmount   Decimal?            @db.Decimal(18, 2)
-  confirmedCurrency String?              @db.VarChar(3)
-  confirmedAmountUsd Decimal?            @db.Decimal(18, 6)
-  confirmedQuoteUnitsPerUsd Decimal?      @db.Decimal(18, 6)
-  confirmedRateSource String?
-  confirmedRateObservedAt DateTime?
-  confirmedAt       DateTime?
-  estimatedCloseAt  DateTime?
-  estimatedAt       DateTime            @default(now())
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  id                        Int                 @id @default(autoincrement())
+  clientId                  Int
+  ownerId                   Int
+  productSubgroupId         Int?
+  title                     String
+  estimatedAmount           Decimal             @db.Decimal(18, 2)
+  currency                  String              @db.VarChar(3)
+  routeToMarket             SalesRoute?
+  stage                     OpportunityStage    @default(NEW)
+  outcome                   OpportunityOutcome?
+  outcomeAt                 DateTime?
+  confirmedAmount           Decimal?            @db.Decimal(18, 2)
+  confirmedCurrency         String?             @db.VarChar(3)
+  confirmedAmountUsd        Decimal?            @db.Decimal(18, 6)
+  confirmedQuoteUnitsPerUsd Decimal?            @db.Decimal(18, 6)
+  confirmedRateSource       String?
+  confirmedRateObservedAt   DateTime?
+  confirmedAt               DateTime?
+  estimatedCloseAt          DateTime?
+  estimatedAt               DateTime            @default(now())
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
 
   client          Client                  @relation(fields: [clientId], references: [id])
   owner           User                    @relation("OpportunityOwner", fields: [ownerId], references: [id])
@@ -60,6 +60,7 @@ model Opportunity {
   interactions    Interaction[]
   followUps       FollowUp[]
   predictions     OpportunityPrediction[]
+  quotations      Quotation[]
 
   @@index([stage, outcome])
   @@index([clientId])
@@ -79,7 +80,7 @@ model OpportunityPrediction {
   explanation        Json?
   predictedAt        DateTime               @default(now())
 
-  opportunity    Opportunity            @relation(fields: [opportunityId], references: [id])
+  opportunity    Opportunity           @relation(fields: [opportunityId], references: [id])
   revenueSummary ClientRevenueSummary? @relation(fields: [revenueSummaryId], references: [id], onDelete: Restrict)
   reviews        PredictionReview[]
 

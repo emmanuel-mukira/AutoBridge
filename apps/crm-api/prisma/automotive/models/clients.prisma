@@ -9,12 +9,13 @@ model Client {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  owner            User                    @relation("ClientOwner", fields: [ownerId], references: [id])
+  owner            User                   @relation("ClientOwner", fields: [ownerId], references: [id])
   contacts         Contact[]
   opportunities    Opportunity[]
   interactions     Interaction[]
   followUps        FollowUp[]
   revenueSummaries ClientRevenueSummary[]
+  quotations       Quotation[]
 
   @@index([businessName])
   @@index([ownerId, deletedAt])
@@ -32,22 +33,31 @@ model Contact {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client     Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  quotations Quotation[]
 
   @@index([clientId])
 }
 
+enum PurchaseHistoryDeclaration {
+  YES
+  NO
+  NOT_SURE
+}
+
 model ClientRevenueSummary {
-  id             Int      @id @default(autoincrement())
+  id             Int                        @id @default(autoincrement())
   clientId       Int
-  amount         Decimal  @db.Decimal(18, 2)
-  currency       String   @db.VarChar(3)
+  amount         Decimal                    @db.Decimal(18, 2)
+  currency       String                     @db.VarChar(3)
   coverageStart  DateTime
   coverageEnd    DateTime
   evidenceSource String
+  declaration    PurchaseHistoryDeclaration @default(NOT_SURE)
+  complete       Boolean                    @default(false)
   verifiedAt     DateTime
   verifiedById   Int?
-  createdAt      DateTime @default(now())
+  createdAt      DateTime                   @default(now())
 
   client      Client                  @relation(fields: [clientId], references: [id])
   verifiedBy  User?                   @relation(fields: [verifiedById], references: [id])

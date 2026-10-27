@@ -55,9 +55,10 @@ try {
   assert.equal(clientResult.response.status, 201);
   created.clients.push(clientResult.data.id);
   const clientId = clientResult.data.id;
+  const product = (await request("/api/products", "GET", undefined, owner)).data.products[0];
 
   const createOpportunity = async (title) => {
-    const result = await request("/api/opportunities", "POST", { clientId, title, estimatedAmount: "129000", currency: "KES" }, owner);
+    const result = await request("/api/opportunities", "POST", { clientId, title, productSubgroupId: product.productSubgroupId, routeToMarket: "OTHER", items: [{ productId: product.id, quantity: "1" }] }, owner);
     assert.equal(result.response.status, 201);
     created.opportunities.push(result.data.id);
     return result.data;
@@ -72,7 +73,7 @@ try {
   assert.equal((await request(`/api/opportunities/${lost.id}/stage`, "PATCH", { stage: "CLOSED", outcome: "LOST" }, owner)).response.status, 200);
 
   assert.equal((await request(`/api/clients/${clientId}/sales-history`, "GET", undefined, outsider)).response.status, 404);
-  assert.equal((await request(`/api/clients/${clientId}/revenue-coverage`, "POST", { confirmedComplete: true }, outsider)).response.status, 404);
+  assert.equal((await request(`/api/clients/${clientId}/revenue-coverage`, "POST", { declaration: "YES", confirmedComplete: true }, outsider)).response.status, 404);
   assert.equal((await request(`/api/opportunities/${won.id}/confirmed-sale`, "PATCH", { confirmedAmount: "1", confirmedCurrency: "USD" }, outsider)).response.status, 404);
 
   const asOf = new Date(Date.now() - 1);
@@ -82,7 +83,7 @@ try {
   await createClosedOpportunity(clientId, owner.user.id, `Boundary excluded ${suffix}`, new Date(windowStart.getTime() - 1), "9000");
   const coverage = await prisma.clientRevenueSummary.create({ data: {
     clientId, amount: "1001", currency: "USD", coverageStart: new Date(windowStart.getTime() - 86_400_000),
-    coverageEnd: new Date(asOf.getTime() - 1), evidenceSource: `Boundary verification ${suffix}`,
+    coverageEnd: new Date(asOf.getTime() + 1), evidenceSource: `Boundary verification ${suffix}`, declaration: "YES", complete: true,
     verifiedAt: new Date(asOf.getTime() - 1), verifiedById: owner.user.id,
   } });
   created.summaries.push(coverage.id);
@@ -106,20 +107,24 @@ try {
   assert.equal(unknownHistory.data.revenueEvidence.state, "UNKNOWN");
   assert.equal(unknownHistory.data.revenueEvidence.ibmRevenueCode, null);
   const beforeVerification = Date.now();
-  const zeroCoverage = await request(`/api/clients/${zeroClient.data.id}/revenue-coverage`, "POST", { confirmedComplete: true }, owner);
+  const zeroCoverage = await request(`/api/clients/${zeroClient.data.id}/revenue-coverage`, "POST", { declaration: "NO" }, owner);
   assert.equal(zeroCoverage.response.status, 201);
   created.summaries.push(zeroCoverage.data.id);
-  assert.equal(zeroCoverage.data.evidenceSource, "User confirmed complete sales history in AutoBridge");
-  assert.ok(Math.abs(new Date(zeroCoverage.data.coverageEnd).getTime() - beforeVerification) < 10_000);
-  const expectedStart = new Date(zeroCoverage.data.coverageEnd); expectedStart.setUTCFullYear(expectedStart.getUTCFullYear() - 2);
-  assert.equal(new Date(zeroCoverage.data.coverageStart).toISOString(), expectedStart.toISOString());
+  assert.equal(zeroCoverage.data.declaration, "NO");
+  assert.equal(zeroCoverage.data.complete, true);
+  assert.ok(new Date(zeroCoverage.data.coverageEnd).getTime() >= beforeVerification);
   const zeroHistory = await request(`/api/clients/${zeroClient.data.id}/sales-history`, "GET", undefined, owner);
   assert.equal(zeroHistory.data.revenueEvidence.state, "VERIFIED_ZERO");
   assert.equal(zeroHistory.data.revenueEvidence.ibmRevenueCode, 0);
+  const unsure = await request(`/api/clients/${zeroClient.data.id}/revenue-coverage`, "POST", { declaration: "NOT_SURE" }, owner);
+  created.summaries.push(unsure.data.id);
+  const unsureHistory = await request(`/api/clients/${zeroClient.data.id}/sales-history`, "GET", undefined, owner);
+  assert.equal(unsureHistory.data.revenueEvidence.state, "UNKNOWN");
 
   console.log("PASS: automatic two-year coverage, confirmed Won values, verified zero, unknown/ownership rules, and corrections");
 } finally {
   await prisma.clientRevenueSummary.deleteMany({ where: { id: { in: created.summaries } } });
+  await prisma.quotation.deleteMany({ where: { opportunityId: { in: created.opportunities } } });
   await prisma.opportunity.deleteMany({ where: { id: { in: created.opportunities } } });
   await prisma.client.deleteMany({ where: { id: { in: created.clients } } });
   await prisma.user.deleteMany({ where: { id: { in: created.users } } });

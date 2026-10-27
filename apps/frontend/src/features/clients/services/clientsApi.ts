@@ -52,6 +52,8 @@ export interface ClientSalesHistory {
       coverageStart: string;
       coverageEnd: string;
       evidenceSource: string;
+      declaration: "YES" | "NO" | "NOT_SURE";
+      complete: boolean;
       verifiedAt: string;
       verifiedBy: { id: number; firstName: string; lastName: string } | null;
     };
@@ -59,7 +61,8 @@ export interface ClientSalesHistory {
 }
 
 export interface RevenueCoverageInput {
-  confirmedComplete: true;
+  declaration: "YES" | "NO" | "NOT_SURE";
+  confirmedComplete?: boolean;
 }
 
 export const clientsApi = {

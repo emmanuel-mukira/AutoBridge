@@ -1,8 +1,9 @@
-import { subYears } from "date-fns";
+import { endOfDay, subYears } from "date-fns";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../client.js";
 import { deriveIbmRevenueHistoryCode, ILLUSTRATIVE_USD_KES_RATE } from "../domain/currency.js";
 import type { ClientActor } from "./clientService.js";
+import type { VerifyRevenueCoverageInput } from "../schemas/clientSalesHistory.schemas.js";
 
 const opportunityInclude = {
   owner: { select: { id: true, firstName: true, lastName: true } },
@@ -78,12 +79,7 @@ export class ClientSalesHistoryService {
       }),
       prisma.opportunity.count({ where: { AND: [windowWhere, missingConfirmedSale(asOf)] } }),
       prisma.clientRevenueSummary.findFirst({
-        where: {
-          clientId,
-          coverageStart: { lte: windowStart },
-          coverageEnd: { gte: windowStart, lte: asOf },
-          verifiedAt: { lte: asOf },
-        },
+        where: { clientId, verifiedAt: { lte: asOf } },
         include: { verifiedBy: { select: { id: true, firstName: true, lastName: true } } },
         orderBy: [{ verifiedAt: "desc" }, { id: "desc" }],
       }),
@@ -97,7 +93,15 @@ export class ClientSalesHistoryService {
     }
     const totalConfirmedUsd = sumUsd(confirmedSales);
     const windowRevenueUsd = sumUsd(windowConfirmedSales);
-    const evidenceComplete = Boolean(coverage) && windowMissingCount === 0;
+    const evidenceComplete = Boolean(
+      coverage?.complete
+      && coverage.declaration !== "NOT_SURE"
+      && coverage.coverageStart <= windowStart
+      && coverage.coverageEnd >= asOf
+      && windowMissingCount === 0
+      && coverage.amount.equals(windowRevenueUsd)
+      && (coverage.declaration === "NO" ? windowRevenueUsd.isZero() : !windowRevenueUsd.isZero()),
+    );
     let ibmRevenueCode: 0 | 1 | 2 | 3 | 4 | null = null;
     let reviewReason: string | null = null;
     if (evidenceComplete) {
@@ -133,6 +137,8 @@ export class ClientSalesHistoryService {
           coverageStart: coverage.coverageStart.toISOString(),
           coverageEnd: coverage.coverageEnd.toISOString(),
           evidenceSource: coverage.evidenceSource,
+          declaration: coverage.declaration,
+          complete: coverage.complete,
           verifiedAt: coverage.verifiedAt.toISOString(),
           verifiedBy: coverage.verifiedBy,
         } : null,
@@ -140,13 +146,17 @@ export class ClientSalesHistoryService {
     };
   }
 
-  async verifyCoverage(actor: ClientActor, clientId: number) {
+  async verifyCoverage(actor: ClientActor, clientId: number, input: VerifyRevenueCoverageInput) {
     const client = await this.findClient(actor, clientId);
     if (!client) return null;
     const verifiedAt = new Date();
     const coverageStart = subYears(verifiedAt, 2);
-    const coverageEnd = verifiedAt;
-    const evidenceSource = "User confirmed complete sales history in AutoBridge";
+    const coverageEnd = endOfDay(verifiedAt);
+    const evidenceSource = input.declaration === "NOT_SURE"
+      ? "User declared that purchase history is unavailable or cannot be verified"
+      : input.declaration === "NO"
+        ? "User confirmed no qualifying purchases in the automatic two-year period"
+        : "User confirmed recorded purchases are complete for the automatic two-year period";
 
     const range = { clientId, outcomeAt: { gte: coverageStart, lt: coverageEnd } } satisfies Prisma.OpportunityWhereInput;
     const [missingCount, confirmedSales] = await Promise.all([
@@ -156,8 +166,10 @@ export class ClientSalesHistoryService {
         select: { confirmedAmountUsd: true },
       }),
     ]);
-    if (missingCount) throw new Error("INCOMPLETE_WON_SALES");
+    if (missingCount && input.declaration !== "NOT_SURE") throw new Error("INCOMPLETE_WON_SALES");
     const amount = sumUsd(confirmedSales);
+    if (input.declaration === "NO" && !amount.isZero()) throw new Error("PURCHASES_EXIST");
+    if (input.declaration === "YES" && amount.isZero()) throw new Error("PURCHASES_NOT_RECORDED");
     return prisma.clientRevenueSummary.create({ data: {
       clientId,
       amount,
@@ -165,6 +177,8 @@ export class ClientSalesHistoryService {
       coverageStart,
       coverageEnd,
       evidenceSource,
+      declaration: input.declaration,
+      complete: input.declaration !== "NOT_SURE",
       verifiedAt,
       verifiedById: actor.id,
     } });

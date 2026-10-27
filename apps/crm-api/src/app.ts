@@ -10,6 +10,8 @@ import opportunityRouter from "./routes/opportunity.routes.js";
 import interactionRouter from "./routes/interaction.routes.js";
 import followUpRouter from "./routes/followUp.routes.js";
 import analyticsRouter from "./routes/analytics.routes.js";
+import productRouter from "./routes/product.routes.js";
+import quotationRouter from "./routes/quotation.routes.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -82,6 +84,8 @@ app.use("/api/opportunities", opportunityRouter);
 app.use("/api/interactions", interactionRouter);
 app.use("/api/follow-ups", followUpRouter);
 app.use("/api/analytics", analyticsRouter);
+app.use("/api/products", productRouter);
+app.use("/api/quotations", quotationRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

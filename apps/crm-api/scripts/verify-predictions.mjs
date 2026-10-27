@@ -9,6 +9,7 @@ const base = `http://127.0.0.1:${process.env.PORT || 3000}`;
 const origin = process.env.FRONTEND_ORIGIN?.split(",")[0] || "http://127.0.0.1:5173";
 const suffix = randomUUID();
 const created = { clients: [], opportunities: [], summaries: [] };
+let catalogueProduct;
 
 async function request(path, method = "GET", body, session) {
   const response = await fetch(`${base}${path}`, { method, headers: { Origin: origin, ...(body !== undefined ? { "Content-Type": "application/json" } : {}), ...(session ? { Cookie: session.cookie, "X-CSRF-Token": session.csrfToken } : {}) }, body: body !== undefined ? JSON.stringify(body) : undefined });
@@ -29,14 +30,14 @@ async function createClient(session, name) {
 }
 
 async function createOpportunity(session, clientId, productSubgroupId, title, complete = true) {
-  const result = await request("/api/opportunities", "POST", { clientId, title: `${title} ${suffix}`, estimatedAmount: "250000", currency: "KES", ...(complete ? { routeToMarket: "RESELLER", productSubgroupId } : {}) }, session);
+  const result = await request("/api/opportunities", "POST", { clientId, title: `${title} ${suffix}`, productSubgroupId, items: [{ productId: catalogueProduct.id, quantity: "2" }], ...(complete ? { routeToMarket: "RESELLER" } : {}) }, session);
   assert.equal(result.response.status, 201);
   created.opportunities.push(result.data.id);
   return result.data;
 }
 
 async function addCoverage(clientId, verifierId, amount = "0") {
-  const row = await prisma.clientRevenueSummary.create({ data: { clientId, amount, currency: "USD", coverageStart: new Date("2020-01-01T00:00:00Z"), coverageEnd: new Date(Date.now() - 86_400_000), evidenceSource: `Prediction verifier ${suffix}`, verifiedAt: new Date(Date.now() - 1000), verifiedById: verifierId } });
+  const row = await prisma.clientRevenueSummary.create({ data: { clientId, amount, currency: "USD", coverageStart: new Date("2020-01-01T00:00:00Z"), coverageEnd: new Date(Date.now() + 86_400_000), evidenceSource: `Prediction verifier ${suffix}`, declaration: Number(amount) === 0 ? "NO" : "YES", complete: true, verifiedAt: new Date(Date.now() - 1000), verifiedById: verifierId } });
   created.summaries.push(row.id);
   return row;
 }
@@ -45,9 +46,10 @@ try {
   assert.ok(process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD && process.env.ML_API_URL && process.env.ML_API_TOKEN);
   assert.equal((await request("/api/opportunities/1/score", "POST")).response.status, 401);
   const admin = await signIn(process.env.ADMIN_EMAIL, process.env.ADMIN_PASSWORD);
-  const outsider = await signIn("demo.sales@autobridge.test", process.env.ADMIN_PASSWORD);
+  const outsider = await signIn("samuel.sales@autobridge.test", process.env.ADMIN_PASSWORD);
   const products = await request("/api/opportunities/products", "GET", undefined, admin);
   const subgroup = products.data.productGroups.find((group) => group.name === "Car Accessories").subgroups.find((item) => item.name === "Replacement Parts");
+  catalogueProduct = (await request(`/api/products?productSubgroupId=${subgroup.id}`, "GET", undefined, admin)).data.products[0];
 
   const positiveClient = await createClient(admin, "Verified positive");
   const zeroClient = await createClient(admin, "Verified zero");
@@ -93,7 +95,9 @@ try {
   let listing = await request("/api/opportunities?limit=100", "GET", undefined, admin);
   assert.equal(listing.data.opportunities.find((item) => item.id === unknown.id).latestPrediction.stale, false);
   assert.equal(listing.data.opportunities.find((item) => item.id === incomplete.id).latestPrediction, null);
-  assert.equal((await request(`/api/opportunities/${unknown.id}`, "PATCH", { estimatedAmount: "300000" }, admin)).response.status, 200);
+  const unknownQuotes = await request(`/api/quotations?opportunityId=${unknown.id}`, "GET", undefined, admin);
+  const unknownDraft = unknownQuotes.data.quotations[0];
+  assert.equal((await request(`/api/quotations/${unknownDraft.id}`, "PATCH", { contactId: null, validUntil: new Date(Date.now() + 7 * 86_400_000).toISOString(), discountPercent: "0", items: [{ productId: catalogueProduct.id, quantity: "3" }] }, admin)).response.status, 200);
   history = await request(`/api/opportunities/${unknown.id}/predictions`, "GET", undefined, admin);
   assert.equal(history.data.latest.stale, true);
   listing = await request("/api/opportunities?limit=100", "GET", undefined, admin);
@@ -120,6 +124,7 @@ try {
     await tx.$executeRawUnsafe('ALTER TABLE "OpportunityPrediction" ENABLE TRIGGER "OpportunityPrediction_immutable"');
   });
   await prisma.clientRevenueSummary.deleteMany({ where: { id: { in: created.summaries } } });
+  await prisma.quotation.deleteMany({ where: { opportunityId: { in: created.opportunities } } });
   await prisma.opportunity.deleteMany({ where: { id: { in: created.opportunities } } });
   await prisma.client.deleteMany({ where: { id: { in: created.clients } } });
   await prisma.$disconnect();

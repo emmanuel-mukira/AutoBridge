@@ -60,6 +60,9 @@ try {
   assert.ok(products.data.productGroups.length > 0);
   const subgroup = products.data.productGroups.flatMap((group) => group.subgroups)[0];
   assert.ok(subgroup);
+  const catalogue = await request(`/api/products?productSubgroupId=${subgroup.id}`, "GET", undefined, admin);
+  const catalogueProduct = catalogue.data.products[0];
+  assert.ok(catalogueProduct);
 
   const repEmail = `opportunity-rep-${suffix}@example.test`;
   const repPassword = `${randomUUID()}-Test!`;
@@ -81,15 +84,15 @@ try {
     ownerId: rep.user.id,
     productSubgroupId: subgroup.id,
     title: `Fleet parts renewal ${suffix}`,
-    estimatedAmount: "250000.00",
-    currency: "KES",
     routeToMarket: "RESELLER",
     estimatedCloseAt: new Date(Date.now() + 86_400_000).toISOString(),
+    items: [{ productId: catalogueProduct.id, quantity: "2" }],
   };
 
   const noCsrf = await fetch(`${base}/api/opportunities`, { method: "POST", headers: { Cookie: rep.cookie, Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify(validInput) });
   assert.equal(noCsrf.status, 403);
-  assert.equal((await request("/api/opportunities", "POST", { ...validInput, estimatedAmount: "12.345" }, rep)).response.status, 400);
+  assert.equal((await request("/api/opportunities", "POST", { ...validInput, items: [] }, rep)).response.status, 400);
+  assert.equal((await request("/api/opportunities", "POST", { ...validInput, items: [{ productId: catalogueProduct.id, quantity: "0" }] }, rep)).response.status, 400);
   assert.equal((await request("/api/opportunities", "POST", { ...validInput, clientId: 2_147_483_647 }, rep)).response.status, 400);
   assert.equal((await request("/api/opportunities", "POST", { ...validInput, productSubgroupId: 2_147_483_647 }, rep)).response.status, 400);
   assert.equal((await request("/api/opportunities", "POST", { ...validInput, ownerId: admin.user.id }, rep)).response.status, 403);
@@ -104,7 +107,7 @@ try {
   assert.equal((await request(`/api/clients/${repClient.data.id}`, "PATCH", { ownerId: admin.user.id }, admin)).response.status, 409);
 
   const stored = await prisma.opportunity.findUnique({ where: { id: createdOpportunity.data.id } });
-  assert.equal(stored?.estimatedAmount.toFixed(2), "250000.00");
+  assert.equal(stored?.estimatedAmount.toFixed(2), (Number(catalogueProduct.defaultSellingPrice) * 2).toFixed(2));
   assert.equal(stored?.currency, "KES");
 
   const bySearch = await request(`/api/opportunities?search=${encodeURIComponent(suffix)}&stage=NEW`, "GET", undefined, rep);
@@ -112,7 +115,8 @@ try {
   assert.equal(bySearch.data.opportunities.length, 1);
   assert.deepEqual((await request(`/api/opportunities?clientId=${repClient.data.id}`, "GET", undefined, rep)).data.opportunities.map((item) => item.id), [createdOpportunity.data.id]);
   assert.equal((await request(`/api/opportunities/${createdOpportunity.data.id}`, "GET", undefined, rep)).response.status, 200);
-  assert.equal((await request(`/api/opportunities/${createdOpportunity.data.id}`, "PATCH", { title: "Updated fleet renewal", estimatedAmount: "300000.00" }, rep)).data.title, "Updated fleet renewal");
+  assert.equal((await request(`/api/opportunities/${createdOpportunity.data.id}`, "PATCH", { title: "Updated fleet renewal" }, rep)).data.title, "Updated fleet renewal");
+  assert.equal((await request(`/api/opportunities/${createdOpportunity.data.id}`, "PATCH", { estimatedAmount: "300000.00" }, rep)).response.status, 400);
   const stageWithoutCsrf = await fetch(`${base}/api/opportunities/${createdOpportunity.data.id}/stage`, { method: "PATCH", headers: { Cookie: rep.cookie, Origin: origin, "Content-Type": "application/json" }, body: JSON.stringify({ stage: "PROPOSAL" }) });
   assert.equal(stageWithoutCsrf.status, 403);
   assert.equal((await request(`/api/opportunities/${createdOpportunity.data.id}/stage`, "PATCH", { stage: "PROPOSAL" }, rep)).data.stage, "PROPOSAL");
@@ -131,9 +135,10 @@ try {
   const adminOpportunity = await request("/api/opportunities", "POST", {
     clientId: adminClient.data.id,
     ownerId: admin.user.id,
+    productSubgroupId: subgroup.id,
     title: `Admin private ${suffix}`,
-    estimatedAmount: "1000",
-    currency: "USD",
+    routeToMarket: "OTHER",
+    items: [{ productId: catalogueProduct.id, quantity: "1" }],
   }, admin);
   assert.equal(adminOpportunity.response.status, 201);
   created.opportunities.push(adminOpportunity.data.id);
@@ -144,6 +149,7 @@ try {
 
   console.log("PASS: routes, validation, CSRF, ownership, reassignment guard, opportunity CRUD, forward stages, closure and persistence");
 } finally {
+  await prisma.quotation.deleteMany({ where: { opportunityId: { in: created.opportunities } } });
   await prisma.opportunity.deleteMany({ where: { id: { in: created.opportunities } } });
   await prisma.client.deleteMany({ where: { id: { in: created.clients } } });
   await prisma.user.deleteMany({ where: { id: { in: created.users } } });
