@@ -60,11 +60,6 @@ export interface ClientSalesHistory {
   };
 }
 
-export interface RevenueCoverageInput {
-  declaration: "YES" | "NO" | "NOT_SURE";
-  confirmedComplete?: boolean;
-}
-
 export const clientsApi = {
   list: async () => (await http.get<{ clients: Client[] }>("/api/clients", { params: { limit: 100 } })).data,
   getById: async (id: number) => (await http.get<Client>(`/api/clients/${id}`)).data,
@@ -72,5 +67,4 @@ export const clientsApi = {
   update: async (id: number, input: ClientInput) => (await http.patch<Client>(`/api/clients/${id}`, input)).data,
   owners: async () => (await http.get<{ owners: ClientOwner[] }>("/api/clients/owners")).data.owners,
   salesHistory: async (id: number, asOf?: string) => (await http.get<ClientSalesHistory>(`/api/clients/${id}/sales-history`, { params: { asOf } })).data,
-  verifyRevenueCoverage: async (id: number, input: RevenueCoverageInput) => (await http.post(`/api/clients/${id}/revenue-coverage`, input)).data,
 };

@@ -71,6 +71,9 @@ export type DecisionSupportSort = "WEIGHTED_VALUE" | "PROBABILITY" | "VALUE" | "
 export interface DecisionSupportFilters {
   ownerId?: number;
   productGroupId?: number;
+  stage?: Exclude<OpportunityStage, "CLOSED">;
+  startDate?: string;
+  endDate?: string;
   predictionStatus?: PredictionStatus;
   sort?: DecisionSupportSort;
   page?: number;
@@ -98,7 +101,13 @@ export interface DecisionSupportOpportunity {
 }
 
 export interface DecisionSupportOverview {
-  scope: { ownerId: number | null; isAdmin: boolean };
+  scope: {
+    ownerId: number | null;
+    isAdmin: boolean;
+    startDate: string | null;
+    endDate: string | null;
+    dateSemantics: string;
+  };
   summary: {
     openOpportunities: number;
     eligibleOpenOpportunities: number;
@@ -125,6 +134,18 @@ export interface DecisionSupportOverview {
     resolvedOpportunities: number;
     eligiblePredictions: number;
     byModelVariant: { variant: "PRIMARY" | "LIMITED_HISTORY"; eligible: number; won: number; lost: number }[];
+    opportunities: {
+      id: number;
+      title: string;
+      outcome: "WON" | "LOST";
+      outcomeAt: string;
+      client: { id: number; businessName: string };
+      owner: { id: number; firstName: string; lastName: string };
+      productGroup: { id: number; name: string } | null;
+      wonProbability: number;
+      modelVariant: "PRIMARY" | "LIMITED_HISTORY";
+      predictedAt: string;
+    }[];
     ready: boolean;
     message: string;
   };

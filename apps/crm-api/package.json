@@ -21,6 +21,7 @@
     "verify:predictions": "node scripts/verify-predictions.mjs",
     "verify:prediction-reviews": "node scripts/verify-prediction-reviews.mjs",
     "verify:quotations": "node scripts/verify-quotations.mjs",
+    "verify:development-seed": "node scripts/verify-development-seed.mjs",
     "verify:currency": "node --experimental-strip-types scripts/verify-currency.ts"
   },
   "keywords": [],

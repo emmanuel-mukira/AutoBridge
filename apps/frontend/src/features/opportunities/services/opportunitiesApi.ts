@@ -171,11 +171,13 @@ export interface OpportunityPrediction {
   conversionSnapshot: Record<string, unknown>;
   explanation: PredictionExplanation | null;
   reviews: PredictionReview[];
+  reused?: boolean;
+  message?: string;
 }
 
 export interface PredictionHistory {
   latest:
-    | (OpportunityPrediction & { stale: boolean; staleReason: string | null })
+    | (OpportunityPrediction & { stale: boolean; staleReason: string | null; outcomeSnapshot: boolean })
     | null;
   history: OpportunityPrediction[];
 }

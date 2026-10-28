@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, BarChart3, BrainCircuit, CircleDollarSign, ExternalLink, Target } from "lucide-react";
+import { AlertTriangle, BarChart3, BrainCircuit, CircleDollarSign, ExternalLink, LoaderCircle, Target } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from "recharts";
 import { useAuth } from "@/app/auth/useAuth";
 import { useUIStore } from "@/app/store";
@@ -17,6 +17,8 @@ import { useDecisionSupport } from "@/features/analytics/hooks/useAnalytics";
 import type { DecisionSupportFilters, PredictionStatus } from "@/features/analytics/types";
 import { useOpportunityOwners, useOpportunityProducts } from "@/features/opportunities/hooks/useOpportunities";
 import { formatMoney } from "@/lib/currency";
+import { useAnalyticsStore } from "@/features/analytics/store/analyticsStore";
+import { opportunityStageLabels } from "@/features/opportunities/utils/labels";
 
 const probabilityConfig = { count: { label: "Opportunities", color: "var(--primary)" } } satisfies ChartConfig;
 const statusLabels: Record<PredictionStatus, string> = { CURRENT: "Current", STALE: "Stale", UNSCORED: "Not scored" };
@@ -25,19 +27,46 @@ const statusClasses: Record<PredictionStatus, string> = {
   STALE: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300",
   UNSCORED: "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300",
 };
+const stages = ["NEW", "QUALIFYING", "PROPOSAL", "NEGOTIATION"] as const;
+const periods = [
+  { value: "all", label: "All open" },
+  { value: "month", label: "Month" },
+  { value: "quarter", label: "Quarter" },
+  { value: "year", label: "Year" },
+] as const;
 
 export default function DecisionSupport() {
   const { user } = useAuth();
   const displayCurrency = useUIStore((state) => state.displayCurrency);
   const [filters, setFilters] = useState<DecisionSupportFilters>({ sort: "WEIGHTED_VALUE", page: 1, limit: 10 });
-  const analytics = useDecisionSupport(filters);
+  const [period, setPeriod] = useState<(typeof periods)[number]["value"]>("all");
+  const [closedOutcome, setClosedOutcome] = useState<"ALL" | "WON" | "LOST">("ALL");
+  const scopeFilters: DecisionSupportFilters = {
+    ownerId: filters.ownerId,
+    productGroupId: filters.productGroupId,
+    stage: filters.stage,
+    startDate: filters.startDate,
+    endDate: filters.endDate,
+    page: 1,
+    limit: 10,
+  };
+  const overviewQuery = useDecisionSupport(scopeFilters);
+  const tableQuery = useDecisionSupport(filters);
   const owners = useOpportunityOwners();
   const products = useOpportunityProducts();
-  const data = analytics.data;
+  const data = overviewQuery.data;
+  const tableData = tableQuery.data;
 
   const updateFilters = (next: Partial<DecisionSupportFilters>) => setFilters((current) => ({ ...current, ...next, page: next.page ?? 1 }));
-  if (analytics.isLoading) return <div className="space-y-5"><Skeleton className="h-20 w-full" /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-32" />)}</div><Skeleton className="h-[32rem]" /></div>;
-  if (analytics.isError || !data) return <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Decision support unavailable</AlertTitle><AlertDescription>{analytics.error instanceof Error ? analytics.error.message : "Unable to load prediction analytics."}</AlertDescription></Alert>;
+  const selectPeriod = (value: (typeof periods)[number]["value"]) => {
+    setPeriod(value);
+    if (value === "all") return updateFilters({ startDate: undefined, endDate: undefined });
+    useAnalyticsStore.getState().setQuickFilter(value);
+    const range = useAnalyticsStore.getState().dateRange;
+    updateFilters({ startDate: range.from.toISOString(), endDate: range.to.toISOString() });
+  };
+  if ((overviewQuery.isLoading && !data) || (tableQuery.isLoading && !tableData)) return <div className="space-y-5"><Skeleton className="h-20 w-full" /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-32" />)}</div><Skeleton className="h-[32rem]" /></div>;
+  if (overviewQuery.isError || tableQuery.isError || !data || !tableData) return <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Decision support unavailable</AlertTitle><AlertDescription>{overviewQuery.error instanceof Error ? overviewQuery.error.message : tableQuery.error instanceof Error ? tableQuery.error.message : "Unable to load prediction analytics."}</AlertDescription></Alert>;
 
   const money = (value: string) => formatMoney(Number(value), "USD", displayCurrency, Number(data.currencyBasis.kesPerUsd));
   const coverage = data.summary.scoringCoveragePercent === null ? "No eligible opportunities" : `${data.summary.currentPredictions} of ${data.summary.eligibleOpenOpportunities} (${data.summary.scoringCoveragePercent}%)`;
@@ -47,12 +76,18 @@ export default function DecisionSupport() {
     { label: "Not scored", value: data.charts.coverage.unscored, className: "bg-slate-400" },
   ];
   const maxCoverage = Math.max(1, ...coverageRows.map((item) => item.value));
+  const monitoredOutcomes = (data.outcomeMonitoring.opportunities ?? []).filter((item) => closedOutcome === "ALL" || item.outcome === closedOutcome);
 
   return (
     <div className="space-y-6 pb-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Decision Support</h1>
         <p className="mt-1 text-sm text-muted-foreground">Current prediction coverage and indicative commercial prioritization for the open pipeline.</p>
+      </div>
+
+      <div className="flex flex-col gap-2 rounded-xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div><p className="text-sm font-medium">Reporting period</p><p className="text-xs text-muted-foreground">Open pipeline uses creation date; closed monitoring uses outcome date. All open keeps older active opportunities visible.</p></div>
+        <div className="flex flex-wrap rounded-lg border bg-muted/40 p-1">{periods.map((item) => <button key={item.value} type="button" aria-pressed={period === item.value} onClick={() => selectPeriod(item.value)} className={`rounded-md px-3 py-1.5 text-xs font-medium ${period === item.value ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{item.label}</button>)}</div>
       </div>
 
       <section aria-labelledby="prediction-overview-heading">
@@ -68,19 +103,20 @@ export default function DecisionSupport() {
       <section aria-labelledby="prioritization-heading">
         <Card className="overflow-hidden">
           <CardHeader>
-            <CardTitle id="prioritization-heading">Opportunity prioritization</CardTitle>
+            <div className="flex items-center justify-between gap-3"><CardTitle id="prioritization-heading">Opportunity prioritization</CardTitle>{tableQuery.isFetching && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><LoaderCircle className="h-3.5 w-3.5 animate-spin" /> Updating results</span>}</div>
             <CardDescription>Probability and weighted value are separate indicators. Follow-up urgency is operational and is not a model input.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3 border-y bg-muted/20 p-4 sm:grid-cols-2 lg:grid-cols-4">
+          <CardContent className="grid gap-3 border-y bg-muted/20 p-4 sm:grid-cols-2 lg:grid-cols-5">
             {user?.role === "ADMIN" && <Select value={filters.ownerId?.toString() ?? "all"} onValueChange={(value) => updateFilters({ ownerId: value === "all" ? undefined : Number(value) })}><SelectTrigger><SelectValue placeholder="All representatives" /></SelectTrigger><SelectContent><SelectItem value="all">All representatives</SelectItem>{owners.data?.map((owner) => <SelectItem key={owner.id} value={owner.id.toString()}>{owner.firstName} {owner.lastName}</SelectItem>)}</SelectContent></Select>}
             <Select value={filters.productGroupId?.toString() ?? "all"} onValueChange={(value) => updateFilters({ productGroupId: value === "all" ? undefined : Number(value) })}><SelectTrigger><SelectValue placeholder="All product groups" /></SelectTrigger><SelectContent><SelectItem value="all">All product groups</SelectItem>{products.data?.map((group) => <SelectItem key={group.id} value={group.id.toString()}>{group.name}</SelectItem>)}</SelectContent></Select>
+            <Select value={filters.stage ?? "all"} onValueChange={(value) => updateFilters({ stage: value === "all" ? undefined : value as DecisionSupportFilters["stage"] })}><SelectTrigger><SelectValue placeholder="All open stages" /></SelectTrigger><SelectContent><SelectItem value="all">All open stages</SelectItem>{stages.map((stage) => <SelectItem key={stage} value={stage}>{opportunityStageLabels[stage]}</SelectItem>)}</SelectContent></Select>
             <Select value={filters.predictionStatus ?? "all"} onValueChange={(value) => updateFilters({ predictionStatus: value === "all" ? undefined : value as PredictionStatus })}><SelectTrigger><SelectValue placeholder="All prediction states" /></SelectTrigger><SelectContent><SelectItem value="all">All prediction states</SelectItem><SelectItem value="CURRENT">Current</SelectItem><SelectItem value="STALE">Stale</SelectItem><SelectItem value="UNSCORED">Not scored</SelectItem></SelectContent></Select>
             <Select value={filters.sort ?? "WEIGHTED_VALUE"} onValueChange={(value) => updateFilters({ sort: value as DecisionSupportFilters["sort"] })}><SelectTrigger><SelectValue placeholder="Sort opportunities" /></SelectTrigger><SelectContent><SelectItem value="WEIGHTED_VALUE">Highest weighted value</SelectItem><SelectItem value="PROBABILITY">Highest win probability</SelectItem><SelectItem value="VALUE">Highest opportunity value</SelectItem><SelectItem value="FOLLOW_UP">Follow-up urgency</SelectItem></SelectContent></Select>
           </CardContent>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader><TableRow><TableHead>Opportunity</TableHead>{data.scope.isAdmin && <TableHead>Sales representative</TableHead>}<TableHead>Estimated value</TableHead><TableHead>Win probability</TableHead><TableHead>Weighted value</TableHead><TableHead>Status</TableHead><TableHead>Follow-up</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader>
-              <TableBody>{data.opportunities.length === 0 ? <TableRow><TableCell colSpan={data.scope.isAdmin ? 8 : 7} className="h-24 text-center text-muted-foreground">No open opportunities match these filters.</TableCell></TableRow> : data.opportunities.map((opportunity) => (
+              <TableBody>{tableData.opportunities.length === 0 ? <TableRow><TableCell colSpan={data.scope.isAdmin ? 8 : 7} className="h-24 text-center text-muted-foreground">No open opportunities match these filters.</TableCell></TableRow> : tableData.opportunities.map((opportunity) => (
                 <TableRow key={opportunity.id}>
                   <TableCell><p className="font-medium">{opportunity.title}</p><p className="text-xs text-muted-foreground">{opportunity.client.businessName}{opportunity.productGroup ? ` · ${opportunity.productGroup.name}` : ""}</p></TableCell>
                   {data.scope.isAdmin && <TableCell>{opportunity.owner.firstName} {opportunity.owner.lastName}</TableCell>}
@@ -94,7 +130,7 @@ export default function DecisionSupport() {
               ))}</TableBody>
             </Table>
           </div>
-          <TablePagination page={data.pagination.page} pageSize={data.pagination.limit} totalPages={Math.max(1, data.pagination.totalPages)} totalCount={data.pagination.total} onPageChange={(page) => setFilters((current) => ({ ...current, page }))} onPageSizeChange={(limit) => setFilters((current) => ({ ...current, limit, page: 1 }))} />
+          <TablePagination page={tableData.pagination.page} pageSize={tableData.pagination.limit} totalPages={Math.max(1, tableData.pagination.totalPages)} totalCount={tableData.pagination.total} onPageChange={(page) => setFilters((current) => ({ ...current, page }))} onPageSizeChange={(limit) => setFilters((current) => ({ ...current, limit, page: 1 }))} />
         </Card>
       </section>
 
@@ -114,10 +150,10 @@ export default function DecisionSupport() {
 
       <section aria-labelledby="monitoring-heading">
         <Card>
-          <CardHeader><CardTitle id="monitoring-heading">Human feedback and prediction monitoring</CardTitle><CardDescription>Business judgment is shown separately from subsequent Won/Lost evidence.</CardDescription></CardHeader>
-          <CardContent className="grid gap-6 lg:grid-cols-2">
-            <div><h3 className="mb-3 text-sm font-semibold">Human feedback</h3><div className="grid grid-cols-2 gap-3"><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Reasonable</p><p className="text-xl font-semibold">{data.reviews.REASONABLE}</p></div><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Overestimated</p><p className="text-xl font-semibold">{data.reviews.OVERESTIMATED}</p></div><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Underestimated</p><p className="text-xl font-semibold">{data.reviews.UNDERESTIMATED}</p></div><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Unreviewed</p><p className="text-xl font-semibold">{data.reviews.unreviewed}</p></div></div><p className="mt-3 text-xs text-muted-foreground">{data.reviews.basis}. Feedback is subjective and is not an accuracy result.</p></div>
-            <div><h3 className="mb-3 text-sm font-semibold">Outcome monitoring readiness</h3><Alert><BarChart3 className="h-4 w-4" /><AlertTitle>{data.outcomeMonitoring.eligiblePredictions} eligible pre-outcome predictions</AlertTitle><AlertDescription>{data.outcomeMonitoring.message}</AlertDescription></Alert><div className="mt-3 grid gap-2 sm:grid-cols-2">{data.outcomeMonitoring.byModelVariant.map((variant) => <div key={variant.variant} className="rounded-lg border p-3"><p className="text-xs font-medium">{variant.variant === "PRIMARY" ? "Full-history model" : "Limited-history model"}</p><p className="mt-1 text-sm text-muted-foreground">{variant.eligible} eligible · {variant.won} Won · {variant.lost} Lost</p></div>)}</div></div>
+          <CardHeader><CardTitle id="monitoring-heading">Human feedback and prediction monitoring</CardTitle><CardDescription>Business judgment is shown separately from subsequent Won/Lost evidence. Outcomes support monitoring but do not prove that a prediction caused the result.</CardDescription></CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid gap-6 lg:grid-cols-2"><div><h3 className="mb-3 text-sm font-semibold">Human feedback</h3><div className="grid grid-cols-2 gap-3"><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Reasonable</p><p className="text-xl font-semibold">{data.reviews.REASONABLE}</p></div><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Overestimated</p><p className="text-xl font-semibold">{data.reviews.OVERESTIMATED}</p></div><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Underestimated</p><p className="text-xl font-semibold">{data.reviews.UNDERESTIMATED}</p></div><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Unreviewed</p><p className="text-xl font-semibold">{data.reviews.unreviewed}</p></div></div><p className="mt-3 text-xs text-muted-foreground">{data.reviews.basis}. Feedback is subjective and is not an accuracy result.</p></div><div><h3 className="mb-3 text-sm font-semibold">Outcome monitoring readiness</h3><Alert><BarChart3 className="h-4 w-4" /><AlertTitle>{data.outcomeMonitoring.eligiblePredictions} eligible pre-outcome predictions</AlertTitle><AlertDescription>{data.outcomeMonitoring.message}</AlertDescription></Alert><div className="mt-3 grid gap-2 sm:grid-cols-2">{data.outcomeMonitoring.byModelVariant.map((variant) => <div key={variant.variant} className="rounded-lg border p-3"><p className="text-xs font-medium">{variant.variant === "PRIMARY" ? "Full-history model" : "Limited-history model"}</p><p className="mt-1 text-sm text-muted-foreground">{variant.eligible} eligible · {variant.won} Won · {variant.lost} Lost</p></div>)}</div></div></div>
+            <div className="border-t pt-5"><div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><h3 className="text-sm font-semibold">Closed opportunity outcomes</h3><p className="text-xs text-muted-foreground">Latest prediction saved before closure compared with the recorded result.</p></div><Select value={closedOutcome} onValueChange={(value) => setClosedOutcome(value as typeof closedOutcome)}><SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ALL">All outcomes</SelectItem><SelectItem value="WON">Won</SelectItem><SelectItem value="LOST">Lost</SelectItem></SelectContent></Select></div><div className="overflow-x-auto rounded-md border"><Table><TableHeader><TableRow><TableHead>Opportunity</TableHead>{data.scope.isAdmin && <TableHead>Sales representative</TableHead>}<TableHead>Prediction</TableHead><TableHead>Outcome</TableHead><TableHead>Model</TableHead><TableHead>Closed</TableHead><TableHead className="text-right">Action</TableHead></TableRow></TableHeader><TableBody>{monitoredOutcomes.length === 0 ? <TableRow><TableCell colSpan={data.scope.isAdmin ? 7 : 6} className="h-20 text-center text-muted-foreground">No scored closed opportunities match this outcome.</TableCell></TableRow> : monitoredOutcomes.map((item) => <TableRow key={item.id}><TableCell><p className="font-medium">{item.title}</p><p className="text-xs text-muted-foreground">{item.client.businessName}{item.productGroup ? ` · ${item.productGroup.name}` : ""}</p></TableCell>{data.scope.isAdmin && <TableCell>{item.owner.firstName} {item.owner.lastName}</TableCell>}<TableCell className="font-medium tabular-nums">{(item.wonProbability * 100).toFixed(1)}%</TableCell><TableCell><Badge variant="outline" className={item.outcome === "WON" ? "border-emerald-500 text-emerald-700 dark:text-emerald-400" : "border-rose-500 text-rose-700 dark:text-rose-400"}>{item.outcome === "WON" ? "Won" : "Lost"}</Badge></TableCell><TableCell className="text-xs text-muted-foreground">{item.modelVariant === "PRIMARY" ? "Full history" : "Limited history"}</TableCell><TableCell className="whitespace-nowrap">{new Date(item.outcomeAt).toLocaleDateString()}</TableCell><TableCell className="text-right"><Link className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline" to={`/dashboard/opportunities/${item.id}`}>View <ExternalLink className="h-3.5 w-3.5" /></Link></TableCell></TableRow>)}</TableBody></Table></div></div>
           </CardContent>
         </Card>
       </section>

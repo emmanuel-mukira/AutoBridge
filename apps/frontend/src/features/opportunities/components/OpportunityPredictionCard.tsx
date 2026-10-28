@@ -32,6 +32,7 @@ export function OpportunityPredictionCard({
   const resolved = Boolean(opportunity.outcome);
   const probability = latest ? Number(latest.wonProbability) * 100 : null;
   const olderPredictions = predictions.data?.history.slice(1) ?? [];
+  const current = Boolean(latest && !latest.stale);
 
   return (
     <section
@@ -52,9 +53,9 @@ export function OpportunityPredictionCard({
         </div>
         <Button
           onClick={() => score.mutate(opportunity.id)}
-          disabled={score.isPending || resolved || missing.length > 0}
+          disabled={score.isPending || resolved || missing.length > 0 || current}
         >
-          {score.isPending ? "Generating..." : "Generate win probability"}
+          {score.isPending ? "Generating..." : resolved ? "Outcome recorded" : current ? "Win probability is current" : latest ? "Regenerate win probability" : "Generate win probability"}
         </Button>
       </div>
       {resolved && (
@@ -112,7 +113,9 @@ export function OpportunityPredictionCard({
                         : "border-emerald-500 text-emerald-700 dark:text-emerald-400"
                     }
                   >
-                    {latest.stale ? "Inputs changed" : "Current inputs"}
+                    {latest.outcomeSnapshot
+                      ? latest.stale ? "Inputs changed before outcome" : "Prediction at outcome"
+                      : latest.stale ? "Inputs changed" : "Current inputs"}
                   </Badge>
                 </div>
               </div>
@@ -123,8 +126,9 @@ export function OpportunityPredictionCard({
               />
               {latest.staleReason && (
                 <p className="mt-3 text-sm text-amber-700 dark:text-amber-400">
-                  The inputs used for this saved prediction have changed.
-                  Generate a new prediction to evaluate the current inputs.
+                  {latest.outcomeSnapshot
+                    ? "The saved prediction does not match the inputs recorded when this opportunity was closed."
+                    : "The inputs used for this saved prediction have changed. Generate a new prediction to evaluate the current inputs."}
                 </p>
               )}
             </CardHeader>

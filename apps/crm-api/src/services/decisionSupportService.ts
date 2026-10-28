@@ -1,11 +1,10 @@
-import { subYears } from "date-fns";
 import { Prisma, type PredictionAssessment, type PredictionModelVariant } from "@prisma/client";
 import { prisma } from "../client.js";
 import { convertMoneyToUsd, ILLUSTRATIVE_USD_KES_RATE } from "../domain/currency.js";
 import type { DecisionSupportQuery } from "../schemas/analytics.schemas.js";
 import type { ClientActor } from "./clientService.js";
-import { deriveRevenueEvidenceState } from "./clientSalesHistoryService.js";
-import { scoringRouteLabels } from "./opportunityScoringService.js";
+import { ClientSalesHistoryService } from "./clientSalesHistoryService.js";
+import { buildCurrentScoringInput, predictionMatchesCurrentInput } from "./opportunityScoringInputs.js";
 
 type PredictionStatus = "CURRENT" | "STALE" | "UNSCORED";
 
@@ -16,25 +15,24 @@ function access(actor: ClientActor, requestedOwnerId?: number): Prisma.Opportuni
   };
 }
 
-function sameFeatures(saved: Prisma.JsonValue, current: Record<string, string | number> | null) {
-  if (!current || !saved || typeof saved !== "object" || Array.isArray(saved)) return false;
-  const snapshot = saved as Prisma.JsonObject;
-  const previous = snapshot.modelReadyFeatures;
-  if (!previous || typeof previous !== "object" || Array.isArray(previous)) return false;
-  return JSON.stringify(Object.entries(previous).sort()) === JSON.stringify(Object.entries(current).sort());
-}
-
 function followUpRank(status: "OVERDUE" | "UPCOMING" | "NONE") {
   return status === "OVERDUE" ? 0 : status === "UPCOMING" ? 1 : 2;
 }
 
 export class DecisionSupportService {
+  private salesHistory = new ClientSalesHistoryService();
+
   async overview(actor: ClientActor, filters: DecisionSupportQuery) {
     const now = new Date();
     const openWhere: Prisma.OpportunityWhereInput = {
       ...access(actor, filters.ownerId),
       outcome: null,
       ...(filters.productGroupId ? { productSubgroup: { productGroupId: filters.productGroupId } } : {}),
+      ...(filters.stage ? { stage: filters.stage } : {}),
+      ...(filters.startDate || filters.endDate ? { createdAt: {
+        ...(filters.startDate ? { gte: new Date(filters.startDate) } : {}),
+        ...(filters.endDate ? { lte: new Date(filters.endDate) } : {}),
+      } } : {}),
     };
     const openOpportunities = await prisma.opportunity.findMany({
       where: openWhere,
@@ -52,60 +50,26 @@ export class DecisionSupportService {
     });
 
     const clientIds = [...new Set(openOpportunities.map((opportunity) => opportunity.clientId))];
-    const windowStart = subYears(now, 2);
-    const [coverages, wonSales] = await Promise.all([
-      prisma.clientRevenueSummary.findMany({
-        where: { clientId: { in: clientIds }, verifiedAt: { lte: now } },
-        orderBy: [{ verifiedAt: "desc" }, { id: "desc" }],
-      }),
-      prisma.opportunity.findMany({
-        where: { clientId: { in: clientIds }, outcome: "WON", outcomeAt: { gte: windowStart, lt: now } },
-        select: {
-          clientId: true, confirmedAmountUsd: true, confirmedAmount: true, confirmedCurrency: true,
-          confirmedQuoteUnitsPerUsd: true, confirmedRateSource: true, confirmedRateObservedAt: true, confirmedAt: true,
-        },
-      }),
-    ]);
-    const coverageByClient = new Map<number, (typeof coverages)[number]>();
-    for (const coverage of coverages) if (!coverageByClient.has(coverage.clientId)) coverageByClient.set(coverage.clientId, coverage);
-    const evidenceByClient = new Map<number, { variant: PredictionModelVariant; revenueCode: number | null; ready: boolean }>();
-    for (const clientId of clientIds) {
-      const coverage = coverageByClient.get(clientId);
-      const sales = wonSales.filter((sale) => sale.clientId === clientId);
-      const completeSales = sales.filter((sale) => sale.confirmedAmount !== null && sale.confirmedCurrency !== null && sale.confirmedAmountUsd !== null && sale.confirmedQuoteUnitsPerUsd !== null && sale.confirmedRateSource !== null && sale.confirmedRateObservedAt !== null && sale.confirmedAt !== null && sale.confirmedAt <= now);
-      const total = completeSales.reduce((sum, sale) => sum.plus(sale.confirmedAmountUsd ?? 0), new Prisma.Decimal(0));
-      const evidence = deriveRevenueEvidenceState({
-        coverage: coverage ?? null,
-        windowStart,
-        asOf: now,
-        windowRevenueUsd: total,
-        windowMissingCount: sales.length - completeSales.length,
-      });
-      if (evidence.state === "UNKNOWN") {
-        evidenceByClient.set(clientId, { variant: "LIMITED_HISTORY", revenueCode: null, ready: true });
-        continue;
-      }
-      evidenceByClient.set(clientId, { variant: "PRIMARY", revenueCode: evidence.ibmRevenueCode, ready: evidence.reviewReason === null });
-    }
+    const evidenceByClient = await this.salesHistory.evidenceForClients(actor, clientIds, now);
 
     const rows = openOpportunities.map((opportunity) => {
       const prediction = opportunity.predictions[0];
-      const evidence = evidenceByClient.get(opportunity.clientId) ?? { variant: "LIMITED_HISTORY" as const, revenueCode: null, ready: true };
-      const eligible = Boolean(opportunity.routeToMarket && opportunity.productSubgroup && evidence.ready);
-      const conversion = convertMoneyToUsd({
+      const evidence = evidenceByClient.get(opportunity.clientId);
+      const eligible = Boolean(opportunity.routeToMarket && opportunity.productSubgroup && evidence && !evidence.reviewReason && (evidence.state === "UNKNOWN" || evidence.ibmRevenueCode !== null));
+      const current = eligible && opportunity.routeToMarket && opportunity.productSubgroup && evidence
+        ? buildCurrentScoringInput(
+            opportunity as typeof opportunity & { routeToMarket: NonNullable<typeof opportunity.routeToMarket>; productSubgroup: NonNullable<typeof opportunity.productSubgroup> },
+            evidence,
+            now,
+          )
+        : null;
+      const conversion = current?.conversion ?? convertMoneyToUsd({
         amount: opportunity.estimatedAmount,
         currency: opportunity.currency,
         ...(opportunity.currency === "KES" ? { rate: ILLUSTRATIVE_USD_KES_RATE } : {}),
         convertedAt: now,
       });
-      const currentFeatures = eligible && opportunity.routeToMarket && opportunity.productSubgroup ? {
-        "Opportunity Amount USD": Number(conversion.modelReadyAmountUsd),
-        ...(evidence.variant === "PRIMARY" ? { "Revenue From Client Past Two Years": evidence.revenueCode! } : {}),
-        "Route To Market": scoringRouteLabels[opportunity.routeToMarket],
-        "Supplies Group": opportunity.productSubgroup.productGroup.name,
-        "Supplies Subgroup": opportunity.productSubgroup.name,
-      } : null;
-      const status: PredictionStatus = !prediction ? "UNSCORED" : prediction.modelVariant === evidence.variant && sameFeatures(prediction.inputSnapshot, currentFeatures) ? "CURRENT" : "STALE";
+      const status: PredictionStatus = !prediction ? "UNSCORED" : current && predictionMatchesCurrentInput(prediction, current) ? "CURRENT" : "STALE";
       const probability = prediction ? Number(prediction.wonProbability) : null;
       const valueUsd = new Prisma.Decimal(conversion.modelReadyAmountUsd);
       const weightedValueUsd = status === "CURRENT" && probability !== null ? valueUsd.times(probability) : null;
@@ -153,19 +117,37 @@ export class DecisionSupportService {
     }
 
     const resolved = await prisma.opportunity.findMany({
-      where: { ...access(actor, filters.ownerId), outcome: { in: ["WON", "LOST"] }, outcomeAt: { not: null }, ...(filters.productGroupId ? { productSubgroup: { productGroupId: filters.productGroupId } } : {}) },
-      select: { id: true, outcome: true, outcomeAt: true },
+      where: {
+        ...access(actor, filters.ownerId),
+        outcome: { in: ["WON", "LOST"] },
+        outcomeAt: {
+          not: null,
+          ...(filters.startDate ? { gte: new Date(filters.startDate) } : {}),
+          ...(filters.endDate ? { lte: new Date(filters.endDate) } : {}),
+        },
+        ...(filters.productGroupId ? { productSubgroup: { productGroupId: filters.productGroupId } } : {}),
+      },
+      select: {
+        id: true,
+        title: true,
+        outcome: true,
+        outcomeAt: true,
+        client: { select: { id: true, businessName: true } },
+        owner: { select: { id: true, firstName: true, lastName: true } },
+        productSubgroup: { select: { productGroup: { select: { id: true, name: true } } } },
+      },
     });
     const resolvedIds = resolved.map((opportunity) => opportunity.id);
+    const resolvedById = new Map(resolved.map((opportunity) => [opportunity.id, opportunity]));
     const historicalPredictions = await prisma.opportunityPrediction.findMany({
       where: { opportunityId: { in: resolvedIds } },
-      select: { id: true, opportunityId: true, modelVariant: true, predictedAt: true },
+      select: { id: true, opportunityId: true, modelVariant: true, wonProbability: true, predictedAt: true },
       orderBy: [{ predictedAt: "desc" }, { id: "desc" }],
     });
     const selectedPredictionByOpportunity = new Map<number, (typeof historicalPredictions)[number]>();
     for (const prediction of historicalPredictions) {
-      const outcomeAt = resolved.find((opportunity) => opportunity.id === prediction.opportunityId)?.outcomeAt;
-      if (outcomeAt && prediction.predictedAt < outcomeAt && !selectedPredictionByOpportunity.has(prediction.opportunityId)) {
+      const outcomeAt = resolvedById.get(prediction.opportunityId)?.outcomeAt;
+      if (outcomeAt && prediction.predictedAt <= outcomeAt && !selectedPredictionByOpportunity.has(prediction.opportunityId)) {
         selectedPredictionByOpportunity.set(prediction.opportunityId, prediction);
       }
     }
@@ -175,10 +157,25 @@ export class DecisionSupportService {
       return {
         variant,
         eligible: selected.length,
-        won: selected.filter((prediction) => resolved.find((opportunity) => opportunity.id === prediction.opportunityId)?.outcome === "WON").length,
-        lost: selected.filter((prediction) => resolved.find((opportunity) => opportunity.id === prediction.opportunityId)?.outcome === "LOST").length,
+        won: selected.filter((prediction) => resolvedById.get(prediction.opportunityId)?.outcome === "WON").length,
+        lost: selected.filter((prediction) => resolvedById.get(prediction.opportunityId)?.outcome === "LOST").length,
       };
     });
+    const outcomeRows = eligibleOutcomes.map((prediction) => {
+      const opportunity = resolvedById.get(prediction.opportunityId)!;
+      return {
+        id: opportunity.id,
+        title: opportunity.title,
+        outcome: opportunity.outcome!,
+        outcomeAt: opportunity.outcomeAt!,
+        client: opportunity.client,
+        owner: opportunity.owner,
+        productGroup: opportunity.productSubgroup?.productGroup ?? null,
+        wonProbability: Number(prediction.wonProbability),
+        modelVariant: prediction.modelVariant,
+        predictedAt: prediction.predictedAt,
+      };
+    }).sort((left, right) => right.outcomeAt.getTime() - left.outcomeAt.getTime());
 
     const bins = [
       { key: "0-20%", minimum: 0, maximum: 0.2 }, { key: "20-40%", minimum: 0.2, maximum: 0.4 },
@@ -188,7 +185,13 @@ export class DecisionSupportService {
     const start = (filters.page - 1) * filters.limit;
 
     return {
-      scope: { ownerId: actor.role === "SALES_REP" ? actor.id : filters.ownerId ?? null, isAdmin: actor.role === "ADMIN" },
+      scope: {
+        ownerId: actor.role === "SALES_REP" ? actor.id : filters.ownerId ?? null,
+        isAdmin: actor.role === "ADMIN",
+        startDate: filters.startDate ?? null,
+        endDate: filters.endDate ?? null,
+        dateSemantics: "Open opportunities use createdAt; closed monitoring uses outcomeAt",
+      },
       summary: {
         openOpportunities: rows.length,
         eligibleOpenOpportunities: eligible.length,
@@ -212,8 +215,11 @@ export class DecisionSupportService {
         resolvedOpportunities: resolved.length,
         eligiblePredictions: eligibleOutcomes.length,
         byModelVariant: outcomeByVariant,
-        ready: false,
-        message: "Insufficient evaluated outcomes. Model performance monitoring will become available as scored opportunities are resolved.",
+        opportunities: outcomeRows,
+        ready: eligibleOutcomes.length > 0,
+        message: eligibleOutcomes.length
+          ? `${eligibleOutcomes.length} scored ${eligibleOutcomes.length === 1 ? "opportunity has" : "opportunities have"} a recorded outcome. More outcomes are needed before drawing reliable model-performance conclusions.`
+          : "No resolved opportunity has an eligible pre-outcome prediction yet.",
       },
       opportunities: filteredRows.slice(start, start + filters.limit),
       pagination: { page: filters.page, limit: filters.limit, total: filteredRows.length, totalPages: Math.ceil(filteredRows.length / filters.limit) },

@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { analyticsApi } from "../services/analyticsApi";
 import { useDateRange } from "../store/analyticsStore";
 import { ANALYTICS_QUERY_KEY } from "../queryKeys";
@@ -16,5 +16,6 @@ export function useDecisionSupport(filters: DecisionSupportFilters = {}) {
   return useQuery({
     queryKey: [...ANALYTICS_QUERY_KEY, "decision-support", filters],
     queryFn: () => analyticsApi.decisionSupport(filters),
+    placeholderData: keepPreviousData,
   });
 }

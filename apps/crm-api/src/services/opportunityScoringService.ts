@@ -1,20 +1,17 @@
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../client.js";
-import { convertMoneyToUsd, ILLUSTRATIVE_USD_KES_RATE } from "../domain/currency.js";
 import type { ClientActor } from "./clientService.js";
 import { ClientSalesHistoryService } from "./clientSalesHistoryService.js";
 import type { CreatePredictionReviewInput } from "../schemas/opportunity.schemas.js";
+import {
+  ADAPTER_VERSION,
+  buildCurrentScoringInput,
+  MODEL_VERSION,
+  predictionMatchesCurrentInput,
+} from "./opportunityScoringInputs.js";
 
-const MODEL_VERSION = "automotive_v1";
-const ADAPTER_VERSION = "autobridge_automotive_v1";
-export const scoringRouteLabels = {
-  FIELDS_SALES: "Fields Sales",
-  OTHER: "Other",
-  RESELLER: "Reseller",
-  TELECOVERAGE: "Telecoverage",
-  TELESALES: "Telesales",
-} as const;
+export { scoringRouteLabels } from "./opportunityScoringInputs.js";
 
 const ContributionSchema = z.object({
   feature: z.string(), display_name: z.string(), feature_value: z.union([z.string(), z.number()]),
@@ -63,37 +60,30 @@ function mlConfig() {
 
 export class OpportunityScoringService {
   private salesHistory = new ClientSalesHistoryService();
+  private inFlight = new Map<string, Promise<unknown>>();
 
-  private async prepare(actor: ClientActor, id: number, asOf: Date) {
+  private async prepare(actor: ClientActor, id: number, asOf: Date, allowResolved = false) {
     const opportunity = await prisma.opportunity.findFirst({
       where: { ...access(actor), id },
       include: { client: true, productSubgroup: { include: { productGroup: true } } },
     });
     if (!opportunity) return null;
-    if (opportunity.outcome) throw new Error("OPPORTUNITY_RESOLVED");
+    if (opportunity.outcome && !allowResolved) throw new Error("OPPORTUNITY_RESOLVED");
     if (!opportunity.routeToMarket) throw new Error("MISSING_ROUTE");
     if (!opportunity.productSubgroup) throw new Error("MISSING_PRODUCT");
 
-    const conversion = convertMoneyToUsd({
-      amount: opportunity.estimatedAmount,
-      currency: opportunity.currency,
-      ...(opportunity.currency === "KES" ? { rate: ILLUSTRATIVE_USD_KES_RATE } : {}),
-      convertedAt: asOf,
-    });
-    const history = await this.salesHistory.get(actor, opportunity.clientId, asOf.toISOString());
-    if (!history) return null;
-    if (history.revenueEvidence.reviewReason) throw new Error("REVENUE_REVIEW_REQUIRED");
-
-    const primary = history.revenueEvidence.state !== "UNKNOWN";
-    if (primary && history.revenueEvidence.ibmRevenueCode === null) throw new Error("REVENUE_REVIEW_REQUIRED");
-    const variant = primary ? "PRIMARY" : "LIMITED_HISTORY";
-    const features: Record<string, string | number> = {
-      "Opportunity Amount USD": Number(conversion.modelReadyAmountUsd),
-      ...(primary ? { "Revenue From Client Past Two Years": history.revenueEvidence.ibmRevenueCode! } : {}),
-      "Route To Market": scoringRouteLabels[opportunity.routeToMarket],
-      "Supplies Group": opportunity.productSubgroup.productGroup.name,
-      "Supplies Subgroup": opportunity.productSubgroup.name,
-    };
+    const evidence = (await this.salesHistory.evidenceForClients(actor, [opportunity.clientId], asOf)).get(opportunity.clientId);
+    if (!evidence) return null;
+    if (evidence.reviewReason) throw new Error("REVENUE_REVIEW_REQUIRED");
+    if (evidence.state !== "UNKNOWN" && evidence.ibmRevenueCode === null) throw new Error("REVENUE_REVIEW_REQUIRED");
+    const current = buildCurrentScoringInput(
+      opportunity as typeof opportunity & {
+        routeToMarket: NonNullable<typeof opportunity.routeToMarket>;
+        productSubgroup: NonNullable<typeof opportunity.productSubgroup>;
+      },
+      evidence,
+      asOf,
+    );
     const inputSnapshot = {
       contractVersion: ADAPTER_VERSION,
       requestedById: actor.id,
@@ -106,20 +96,38 @@ export class OpportunityScoringService {
         productSubgroup: opportunity.productSubgroup.name,
       },
       revenueEvidence: {
-        state: history.revenueEvidence.state, amountUsd: history.revenueEvidence.amountUsd,
-        ibmRevenueCode: history.revenueEvidence.ibmRevenueCode,
-        windowStart: history.revenueEvidence.windowStart, windowEnd: history.revenueEvidence.windowEnd,
-        coverageId: history.revenueEvidence.coverage?.id ?? null,
+        state: evidence.state, amountUsd: evidence.amountUsd,
+        ibmRevenueCode: evidence.ibmRevenueCode,
+        windowStart: evidence.windowStart.toISOString(), windowEnd: evidence.windowEnd.toISOString(),
+        coverageId: evidence.coverage?.id ?? null,
       },
-      modelReadyFeatures: features,
+      scoringIdentity: current.identity,
+      modelReadyFeatures: current.features,
     };
-    return { opportunity, history, conversion, variant, features, inputSnapshot };
+    return { opportunity, evidence, ...current, inputSnapshot };
   }
 
   async score(actor: ClientActor, id: number) {
+    const key = `${actor.id}:${id}`;
+    const running = this.inFlight.get(key);
+    if (running) return running as ReturnType<OpportunityScoringService["scoreOnce"]>;
+    const promise = this.scoreOnce(actor, id).finally(() => this.inFlight.delete(key));
+    this.inFlight.set(key, promise);
+    return promise;
+  }
+
+  private async scoreOnce(actor: ClientActor, id: number) {
     const asOf = new Date();
     const prepared = await this.prepare(actor, id, asOf);
     if (!prepared) return null;
+    const latest = await prisma.opportunityPrediction.findFirst({
+      where: { opportunityId: id },
+      include: { reviews: { include: reviewInclude, orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
+      orderBy: [{ predictedAt: "desc" }, { id: "desc" }],
+    });
+    if (latest && predictionMatchesCurrentInput(latest, prepared)) {
+      return { ...latest, reused: true, message: "The current win probability is already up to date." };
+    }
     const config = mlConfig();
     let response: Response;
     try {
@@ -136,27 +144,62 @@ export class OpportunityScoringService {
     const parsed = MlResponseSchema.safeParse(await response.json());
     if (!parsed.success || parsed.data.variant !== prepared.variant) throw new Error("ML_INVALID_RESPONSE");
 
-    const prediction = await prisma.opportunityPrediction.create({
-      data: {
-        opportunityId: id,
-        revenueSummaryId:
-          prepared.variant === "PRIMARY"
-            ? (prepared.history.revenueEvidence.coverage?.id ?? null)
-            : null,
-        modelVersion: MODEL_VERSION,
-        adapterVersion: ADAPTER_VERSION,
-        modelVariant: prepared.variant,
-        inputSnapshot: prepared.inputSnapshot,
-        conversionSnapshot: prepared.conversion,
-        wonProbability: new Prisma.Decimal(parsed.data.won_probability),
-        explanation: parsed.data.explanation,
-      },
+    const currentAfterInference = await this.prepare(actor, id, new Date());
+    if (!currentAfterInference || !predictionMatchesCurrentInput({
+      modelVersion: MODEL_VERSION,
+      adapterVersion: ADAPTER_VERSION,
+      modelVariant: prepared.variant,
+      inputSnapshot: prepared.inputSnapshot,
+    }, currentAfterInference)) throw new Error("SCORING_INPUTS_CHANGED");
+
+    const prediction = await prisma.$transaction(async (tx) => {
+      let revenueSummaryId = prepared.evidence.coverage?.id ?? null;
+      if (prepared.variant === "PRIMARY" && revenueSummaryId === null) {
+        if (prepared.evidence.state !== "VERIFIED_COMPLETE" || prepared.evidence.amountUsd === null) {
+          throw new Error("REVENUE_REVIEW_REQUIRED");
+        }
+        const summary = await tx.clientRevenueSummary.create({
+          data: {
+            clientId: prepared.opportunity.clientId,
+            amount: new Prisma.Decimal(prepared.evidence.amountUsd).toDecimalPlaces(2),
+            currency: "USD",
+            coverageStart: prepared.evidence.windowStart,
+            coverageEnd: prepared.evidence.windowEnd,
+            evidenceSource: "Automatically calculated from confirmed Won opportunities",
+            declaration: "YES",
+            complete: true,
+            verifiedAt: asOf,
+            verifiedById: actor.id,
+          },
+        });
+        revenueSummaryId = summary.id;
+      }
+      const inputSnapshot = {
+        ...prepared.inputSnapshot,
+        revenueEvidence: { ...prepared.inputSnapshot.revenueEvidence, coverageId: revenueSummaryId },
+      };
+      return tx.opportunityPrediction.create({
+        data: {
+          opportunityId: id,
+          revenueSummaryId,
+          modelVersion: MODEL_VERSION,
+          adapterVersion: ADAPTER_VERSION,
+          modelVariant: prepared.variant,
+          inputSnapshot,
+          conversionSnapshot: prepared.conversion,
+          wonProbability: new Prisma.Decimal(parsed.data.won_probability),
+          explanation: parsed.data.explanation,
+        },
+      });
     });
-    return { ...prediction, reviews: [] };
+    return { ...prediction, reviews: [], reused: false, message: "Win probability generated." };
   }
 
   async history(actor: ClientActor, id: number) {
-    const opportunity = await prisma.opportunity.findFirst({ where: { ...access(actor), id }, select: { id: true } });
+    const opportunity = await prisma.opportunity.findFirst({
+      where: { ...access(actor), id },
+      select: { id: true, outcome: true, outcomeAt: true },
+    });
     if (!opportunity) return null;
     const predictions = await prisma.opportunityPrediction.findMany({
       where: { opportunityId: id },
@@ -167,18 +210,28 @@ export class OpportunityScoringService {
     let staleReason: string | null = null;
     if (predictions[0]) {
       try {
-        const current = await this.prepare(actor, id, new Date());
-        const snapshot = predictions[0].inputSnapshot as Prisma.JsonObject;
-        const previous = snapshot.modelReadyFeatures as Prisma.JsonObject;
-        stale = !current || JSON.stringify(Object.entries(previous).sort()) !== JSON.stringify(Object.entries(current.features).sort());
-        if (stale) staleReason = "Scoring inputs or eligible revenue evidence changed";
+        const current = await this.prepare(
+          actor,
+          id,
+          opportunity.outcomeAt ?? new Date(),
+          Boolean(opportunity.outcome),
+        );
+        stale = !current || !predictionMatchesCurrentInput(predictions[0], current);
+        if (stale) staleReason = opportunity.outcome
+          ? "Scoring inputs changed before the outcome was recorded"
+          : "Scoring inputs or eligible revenue evidence changed";
       } catch {
         stale = true;
-        staleReason = "The opportunity is no longer ready for scoring";
+        staleReason = opportunity.outcome
+          ? "The saved prediction cannot be matched to the inputs at outcome"
+          : "The opportunity is no longer ready for scoring";
       }
     }
     const rows = predictions.map((prediction) => ({ ...prediction, wonProbability: prediction.wonProbability.toString() }));
-    return { latest: rows[0] ? { ...rows[0], stale, staleReason } : null, history: rows };
+    return {
+      latest: rows[0] ? { ...rows[0], stale, staleReason, outcomeSnapshot: Boolean(opportunity.outcome) } : null,
+      history: rows,
+    };
   }
 
   private async accessiblePrediction(actor: ClientActor, opportunityId: number, predictionId: number) {

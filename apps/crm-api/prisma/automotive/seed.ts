@@ -94,7 +94,7 @@ const productGroups: Record<string, string[]> = {
   "Tires & Wheels": ["Tires & Wheels"],
 };
 
-const observedAt = new Date("2026-10-26T00:00:00.000Z");
+const observedAt = new Date("2026-10-27T00:00:00.000Z");
 const catalogueProducts = [
   {
     sku: "AB-BAT-001",
@@ -341,6 +341,46 @@ const catalogueProducts = [
     source: "Tiresoko",
     url: "https://tiresoko.co.ke/",
   },
+  {
+    sku: "AB-MCY-001",
+    subgroup: "Motorcycle Parts",
+    name: "Bajaj BM100 chain and sprocket kit, 428 chain, 114 links, 14T/36T",
+    brand: "Bajaj",
+    unit: "Kit",
+    price: "3500",
+    source: "Dajas Enterprises",
+    url: "https://dajas.co.ke/product/chain-sprocket-bm-100",
+  },
+  {
+    sku: "AB-MCY-002",
+    subgroup: "Motorcycle Parts",
+    name: "TVS chain sprocket, supplier SKU GMK13068",
+    brand: "TVS",
+    unit: "Piece",
+    price: "2616",
+    source: "Guru Motorcycles Kenya",
+    url: "https://www.gurumotorcycles.co.ke/",
+  },
+  {
+    sku: "AB-SRV-001",
+    subgroup: "Shelters & RV",
+    name: "Quechua multi-purpose camping tarp shelter, size L, Fresh",
+    brand: "Quechua",
+    unit: "Piece",
+    price: "10900",
+    source: "Decathlon Kenya",
+    url: "https://www.decathlon.co.ke/p/366904-61231-multi-purpose-camping-tarp-shelter-size-l-fresh.html",
+  },
+  {
+    sku: "AB-SRV-002",
+    subgroup: "Shelters & RV",
+    name: "Quechua 2-person pop-up camping and beach shelter, 2 Seconds 2P Fresh",
+    brand: "Quechua",
+    unit: "Piece",
+    price: "8950",
+    source: "Decathlon Kenya",
+    url: "https://www.decathlon.co.ke/20191-shelters-tarps",
+  },
 ] as const;
 
 try {
@@ -404,28 +444,24 @@ try {
     });
   }
 
-  const firstRep = await prisma.user.upsert({
-    where: { email: "samuel.sales@autobridge.test" },
-    update: { firstName: "Samuel", lastName: "Kamau", active: true },
-    create: {
-      email: "samuel.sales@autobridge.test",
-      firstName: "Samuel",
-      lastName: "Kamau",
-      passwordHash: await bcrypt.hash(password, 12),
-      role: "SALES_REP",
-    },
-  });
-  const secondRep = await prisma.user.upsert({
-    where: { email: "grace.sales@autobridge.test" },
-    update: { firstName: "Grace", lastName: "Achieng", active: true },
-    create: {
-      email: "grace.sales@autobridge.test",
-      firstName: "Grace",
-      lastName: "Achieng",
-      passwordHash: await bcrypt.hash(password, 12),
-      role: "SALES_REP",
-    },
-  });
+  async function ensureSalesRep(targetEmail: string, legacyEmail: string, repFirstName: string, repLastName: string) {
+    const existing = await prisma.user.findFirst({ where: { email: { in: [targetEmail, legacyEmail] } } });
+    if (existing && existing.role !== "SALES_REP") throw new Error(`${targetEmail} belongs to a non-sales user`);
+    if (!existing) return prisma.user.create({ data: { email: targetEmail, firstName: repFirstName, lastName: repLastName, passwordHash: await bcrypt.hash(password, 12), role: "SALES_REP" } });
+    const passwordChanged = !(await bcrypt.compare(password, existing.passwordHash));
+    return prisma.user.update({
+      where: { id: existing.id },
+      data: {
+        email: targetEmail,
+        firstName: repFirstName,
+        lastName: repLastName,
+        active: true,
+        ...(passwordChanged ? { passwordHash: await bcrypt.hash(password, 12), sessions: { updateMany: { where: { revokedAt: null }, data: { revokedAt: new Date() } } } } : {}),
+      },
+    });
+  }
+  const firstRep = await ensureSalesRep("samuel@autobridge.local", "samuel.sales@autobridge.test", "Samuel", "Kamau");
+  const secondRep = await ensureSalesRep("grace@autobridge.local", "grace.sales@autobridge.test", "Grace", "Achieng");
 
   for (const [index, client] of clients.entries()) {
     const ownerId = index % 2 === 0 ? firstRep.id : secondRep.id;
@@ -606,6 +642,78 @@ try {
       stage: "NEGOTIATION" as const,
       estimatedCloseAt: new Date("2026-11-07T09:00:00.000Z"),
     },
+    {
+      client: "Eastern Auto Distributors",
+      subgroup: "Car Electronics",
+      title: "Dealer dash camera restock",
+      estimatedAmount: "488000.00",
+      routeToMarket: "RESELLER" as const,
+      stage: "NEW" as const,
+      estimatedCloseAt: new Date("2026-12-08T09:00:00.000Z"),
+    },
+    {
+      client: "Lakeside Motors",
+      subgroup: "Interior Accessories",
+      title: "Workshop interior accessories order",
+      estimatedAmount: "157400.00",
+      routeToMarket: "TELESALES" as const,
+      stage: "QUALIFYING" as const,
+      estimatedCloseAt: new Date("2026-11-24T09:00:00.000Z"),
+    },
+    {
+      client: "Highland Fleet Workshop",
+      subgroup: "Motorcycle Parts",
+      title: "Motorcycle drivetrain spares order",
+      estimatedAmount: "559280.00",
+      routeToMarket: "FIELDS_SALES" as const,
+      stage: "PROPOSAL" as const,
+      estimatedCloseAt: new Date("2026-11-18T09:00:00.000Z"),
+    },
+    {
+      client: "Coast Fleet Services",
+      subgroup: "Shelters & RV",
+      title: "Field service shelter equipment",
+      estimatedAmount: "212072.00",
+      routeToMarket: "FIELDS_SALES" as const,
+      stage: "NEGOTIATION" as const,
+      estimatedCloseAt: new Date("2026-11-10T09:00:00.000Z"),
+    },
+    {
+      client: "Metro Auto Parts",
+      subgroup: "Tires & Wheels",
+      title: "Retail tyre replenishment",
+      estimatedAmount: "745560.00",
+      routeToMarket: "RESELLER" as const,
+      stage: "NEW" as const,
+      estimatedCloseAt: new Date("2026-12-12T09:00:00.000Z"),
+    },
+    {
+      client: "Rift Valley Garage",
+      subgroup: "Batteries & Accessories",
+      title: "Garage battery inventory",
+      estimatedAmount: "309750.00",
+      routeToMarket: "TELECOVERAGE" as const,
+      stage: "QUALIFYING" as const,
+      estimatedCloseAt: new Date("2026-11-30T09:00:00.000Z"),
+    },
+    {
+      client: "Savannah Fleet Logistics",
+      subgroup: "Exterior Accessories",
+      title: "Fleet exterior protection pack",
+      estimatedAmount: "119980.00",
+      routeToMarket: "TELESALES" as const,
+      stage: "PROPOSAL" as const,
+      estimatedCloseAt: new Date("2026-11-21T09:00:00.000Z"),
+    },
+    {
+      client: "Eastern Auto Distributors",
+      subgroup: "Towing & Hitches",
+      title: "Reseller towing rope order",
+      estimatedAmount: "42000.00",
+      routeToMarket: "RESELLER" as const,
+      stage: "NEGOTIATION" as const,
+      estimatedCloseAt: new Date("2026-11-09T09:00:00.000Z"),
+    },
   ];
   const seededOpportunities = new Map<
     string,
@@ -646,10 +754,11 @@ try {
       subgroup: "Replacement Parts",
       title: "2025 replacement parts agreement",
       estimatedAmount: "820000.00",
-      confirmedAmount: "780000.00",
+      confirmedAmount: "897216.00",
       currency: "KES" as const,
       routeToMarket: "RESELLER" as const,
       outcome: "WON" as const,
+      createdAt: new Date("2025-06-02T09:00:00.000Z"),
       outcomeAt: new Date("2025-08-15T09:00:00.000Z"),
     },
     {
@@ -657,10 +766,11 @@ try {
       subgroup: "Car Electronics",
       title: "2026 electronics distribution order",
       estimatedAmount: "1612500.00",
-      confirmedAmount: "1612500.00",
+      confirmedAmount: "1601280.00",
       currency: "KES" as const,
       routeToMarket: "FIELDS_SALES" as const,
       outcome: "WON" as const,
+      createdAt: new Date("2026-01-19T09:00:00.000Z"),
       outcomeAt: new Date("2026-03-12T09:00:00.000Z"),
     },
     {
@@ -671,6 +781,7 @@ try {
       currency: "KES" as const,
       routeToMarket: "FIELDS_SALES" as const,
       outcome: "LOST" as const,
+      createdAt: new Date("2025-10-10T09:00:00.000Z"),
       outcomeAt: new Date("2025-12-04T09:00:00.000Z"),
     },
     {
@@ -678,11 +789,70 @@ try {
       subgroup: "Batteries & Accessories",
       title: "Highland fleet battery order",
       estimatedAmount: "960000.00",
-      confirmedAmount: "910000.00",
+      confirmedAmount: "877691.63",
       currency: "KES" as const,
       routeToMarket: "FIELDS_SALES" as const,
       outcome: "WON" as const,
+      createdAt: new Date("2026-04-06T09:00:00.000Z"),
       outcomeAt: new Date("2026-06-20T09:00:00.000Z"),
+    },
+    {
+      client: "Eastern Auto Distributors",
+      subgroup: "Car Electronics",
+      title: "Fictional October dealer electronics order",
+      estimatedAmount: "6400000.00",
+      confirmedAmount: "6099840.00",
+      currency: "KES" as const,
+      routeToMarket: "RESELLER" as const,
+      outcome: "WON" as const,
+      createdAt: new Date("2026-09-10T09:00:00.000Z"),
+      outcomeAt: new Date("2026-10-05T09:00:00.000Z"),
+    },
+    {
+      client: "Metro Auto Parts",
+      subgroup: "Tires & Wheels",
+      title: "Fictional October tyre proposal",
+      estimatedAmount: "437040.00",
+      currency: "KES" as const,
+      routeToMarket: "TELESALES" as const,
+      outcome: "LOST" as const,
+      createdAt: new Date("2026-09-18T09:00:00.000Z"),
+      outcomeAt: new Date("2026-10-08T09:00:00.000Z"),
+    },
+    {
+      client: "Coast Fleet Services",
+      subgroup: "Shelters & RV",
+      title: "Fictional coastal service shelter proposal",
+      estimatedAmount: "327000.00",
+      currency: "KES" as const,
+      routeToMarket: "FIELDS_SALES" as const,
+      outcome: "LOST" as const,
+      createdAt: new Date("2026-09-22T09:00:00.000Z"),
+      outcomeAt: new Date("2026-10-12T09:00:00.000Z"),
+    },
+    {
+      client: "Savannah Fleet Logistics",
+      subgroup: "Tires & Wheels",
+      title: "Fictional fleet tyre supply",
+      estimatedAmount: "3600000.00",
+      confirmedAmount: "3449880.00",
+      currency: "KES" as const,
+      routeToMarket: "FIELDS_SALES" as const,
+      outcome: "WON" as const,
+      createdAt: new Date("2026-09-01T09:00:00.000Z"),
+      outcomeAt: new Date("2026-10-18T09:00:00.000Z"),
+    },
+    {
+      client: "Highland Fleet Workshop",
+      subgroup: "Batteries & Accessories",
+      title: "Fictional regional fleet battery framework",
+      estimatedAmount: "54300000.00",
+      confirmedAmount: "53214000.00",
+      currency: "KES" as const,
+      routeToMarket: "FIELDS_SALES" as const,
+      outcome: "WON" as const,
+      createdAt: new Date("2026-08-03T09:00:00.000Z"),
+      outcomeAt: new Date("2026-10-22T09:00:00.000Z"),
     },
   ];
   for (const item of historicalOpportunityData) {
@@ -690,14 +860,6 @@ try {
     const exists = await prisma.opportunity.findFirst({
       where: { clientId: client.id, title: item.title },
     });
-    if (exists) {
-      seededOpportunities.set(item.title, {
-        id: exists.id,
-        clientId: exists.clientId,
-        ownerId: exists.ownerId,
-      });
-      continue;
-    }
     const confirmedAt = item.outcomeAt;
     const conversion =
       item.outcome === "WON"
@@ -710,6 +872,44 @@ try {
             convertedAt: confirmedAt,
           })
         : null;
+    if (exists) {
+      await prisma.opportunity.update({
+        where: { id: exists.id },
+        data: {
+          productSubgroupId: subgroupByName.get(item.subgroup)!.id,
+          routeToMarket: item.routeToMarket,
+          stage: "CLOSED",
+          outcome: item.outcome,
+          outcomeAt: item.outcomeAt,
+          createdAt: item.createdAt,
+          ...(conversion
+            ? {
+                confirmedAmount: conversion.originalAmount,
+                confirmedCurrency: conversion.originalCurrency,
+                confirmedAmountUsd: conversion.modelReadyAmountUsd,
+                confirmedQuoteUnitsPerUsd: conversion.quoteUnitsPerUsd,
+                confirmedRateSource: conversion.rateSource,
+                confirmedRateObservedAt: new Date(conversion.rateObservedAt),
+                confirmedAt,
+              }
+            : {
+                confirmedAmount: null,
+                confirmedCurrency: null,
+                confirmedAmountUsd: null,
+                confirmedQuoteUnitsPerUsd: null,
+                confirmedRateSource: null,
+                confirmedRateObservedAt: null,
+                confirmedAt: null,
+              }),
+        },
+      });
+      seededOpportunities.set(item.title, {
+        id: exists.id,
+        clientId: exists.clientId,
+        ownerId: exists.ownerId,
+      });
+      continue;
+    }
     const opportunity = await prisma.opportunity.create({
       data: {
         clientId: client.id,
@@ -719,6 +919,7 @@ try {
         estimatedAmount: item.estimatedAmount,
         currency: item.currency,
         routeToMarket: item.routeToMarket,
+        createdAt: item.createdAt,
       },
     });
     await prisma.opportunity.update({
@@ -747,26 +948,27 @@ try {
     });
   }
 
-  const coverageStart = new Date("2024-10-26T00:00:00.000Z");
-  const coverageEnd = new Date("2026-10-26T23:59:59.999Z");
-  const coverageVerifiedAt = new Date("2026-10-26T08:00:00.000Z");
+  const coverageVerifiedAt = new Date();
+  const coverageStart = new Date(coverageVerifiedAt);
+  coverageStart.setUTCFullYear(coverageStart.getUTCFullYear() - 2);
+  coverageStart.setUTCHours(0, 0, 0, 0);
+  const coverageEnd = new Date(coverageVerifiedAt);
+  coverageEnd.setUTCHours(23, 59, 59, 999);
   const coverageSource =
     "Verification of complete AutoBridge sales records";
   for (const clientName of [
     "Metro Auto Parts",
     "Lakeside Motors",
     "Highland Fleet Workshop",
+    "Eastern Auto Distributors",
   ]) {
     const client = seededClients.get(clientName)!;
     const existing = await prisma.clientRevenueSummary.findFirst({
       where: {
         clientId: client.id,
-        coverageStart,
-        coverageEnd,
         evidenceSource: coverageSource,
       },
     });
-    if (existing) continue;
     const wins = await prisma.opportunity.findMany({
       where: {
         clientId: client.id,
@@ -780,8 +982,7 @@ try {
       (total, opportunity) => total.plus(opportunity.confirmedAmountUsd ?? 0),
       new Prisma.Decimal(0),
     );
-    await prisma.clientRevenueSummary.create({
-      data: {
+    const coverageData = {
         clientId: client.id,
         amount,
         currency: "USD",
@@ -792,8 +993,9 @@ try {
         complete: true,
         verifiedAt: coverageVerifiedAt,
         verifiedById: admin.id,
-      },
-    });
+    };
+    if (existing) await prisma.clientRevenueSummary.update({ where: { id: existing.id }, data: coverageData });
+    else await prisma.clientRevenueSummary.create({ data: coverageData });
   }
 
   const interactionData = [
@@ -979,6 +1181,7 @@ try {
         { sku: "AB-RPL-004", quantity: "20" },
         { sku: "AB-RPL-006", quantity: "200" },
       ],
+      issueDate: new Date("2025-07-15T09:00:00.000Z"),
     },
     {
       quoteNumber: "ABQ-2026-006",
@@ -991,6 +1194,7 @@ try {
         { sku: "AB-CEL-001", quantity: "140" },
         { sku: "AB-CEL-002", quantity: "250" },
       ],
+      issueDate: new Date("2026-02-20T09:00:00.000Z"),
     },
     {
       quoteNumber: "ABQ-2025-007",
@@ -1003,6 +1207,7 @@ try {
         { sku: "AB-GCC-001", quantity: "80" },
         { sku: "AB-GCC-002", quantity: "30" },
       ],
+      issueDate: new Date("2025-11-10T09:00:00.000Z"),
     },
     {
       quoteNumber: "ABQ-2026-008",
@@ -1015,6 +1220,129 @@ try {
         { sku: "AB-BAT-003", quantity: "25" },
         { sku: "AB-BAT-004", quantity: "45" },
       ],
+      issueDate: new Date("2026-05-15T09:00:00.000Z"),
+    },
+    {
+      quoteNumber: "ABQ-2026-009",
+      opportunity: "Dealer dash camera restock",
+      version: 1,
+      status: "DRAFT" as const,
+      current: true,
+      discount: "0",
+      items: [{ sku: "AB-CEL-001", quantity: "40" }, { sku: "AB-CEL-002", quantity: "100" }],
+    },
+    {
+      quoteNumber: "ABQ-2026-010",
+      opportunity: "Workshop interior accessories order",
+      version: 1,
+      status: "DRAFT" as const,
+      current: true,
+      discount: "0",
+      items: [{ sku: "AB-INT-001", quantity: "25" }, { sku: "AB-INT-002", quantity: "12" }, { sku: "AB-INT-003", quantity: "10" }],
+    },
+    {
+      quoteNumber: "ABQ-2026-011",
+      opportunity: "Motorcycle drivetrain spares order",
+      version: 1,
+      status: "SENT" as const,
+      current: true,
+      discount: "0",
+      items: [{ sku: "AB-MCY-001", quantity: "100" }, { sku: "AB-MCY-002", quantity: "80" }],
+    },
+    {
+      quoteNumber: "ABQ-2026-012",
+      opportunity: "Field service shelter equipment",
+      version: 1,
+      status: "SENT" as const,
+      current: true,
+      discount: "2",
+      items: [{ sku: "AB-SRV-001", quantity: "10" }, { sku: "AB-SRV-002", quantity: "12" }],
+    },
+    {
+      quoteNumber: "ABQ-2026-013",
+      opportunity: "Retail tyre replenishment",
+      version: 1,
+      status: "DRAFT" as const,
+      current: true,
+      discount: "0",
+      items: [{ sku: "AB-TYR-001", quantity: "12" }, { sku: "AB-TYR-002", quantity: "8" }],
+    },
+    {
+      quoteNumber: "ABQ-2026-014",
+      opportunity: "Garage battery inventory",
+      version: 1,
+      status: "DRAFT" as const,
+      current: true,
+      discount: "0",
+      items: [{ sku: "AB-BAT-001", quantity: "10" }, { sku: "AB-BAT-002", quantity: "15" }],
+    },
+    {
+      quoteNumber: "ABQ-2026-015",
+      opportunity: "Fleet exterior protection pack",
+      version: 1,
+      status: "SENT" as const,
+      current: true,
+      discount: "0",
+      items: [{ sku: "AB-EXT-001", quantity: "20" }, { sku: "AB-EXT-002", quantity: "40" }],
+    },
+    {
+      quoteNumber: "ABQ-2026-016",
+      opportunity: "Reseller towing rope order",
+      version: 1,
+      status: "SENT" as const,
+      current: true,
+      discount: "0",
+      items: [{ sku: "AB-TOW-001", quantity: "60" }],
+    },
+    {
+      quoteNumber: "ABQ-2026-017",
+      opportunity: "Fictional October dealer electronics order",
+      version: 1,
+      status: "ACCEPTED" as const,
+      current: true,
+      discount: "4.69",
+      issueDate: new Date("2026-09-25T09:00:00.000Z"),
+      items: [{ sku: "AB-CEL-001", quantity: "500" }, { sku: "AB-CEL-002", quantity: "2000" }],
+    },
+    {
+      quoteNumber: "ABQ-2026-018",
+      opportunity: "Fictional October tyre proposal",
+      version: 1,
+      status: "REJECTED" as const,
+      current: true,
+      discount: "0",
+      issueDate: new Date("2026-10-01T09:00:00.000Z"),
+      items: [{ sku: "AB-TYR-001", quantity: "8" }, { sku: "AB-TYR-002", quantity: "4" }],
+    },
+    {
+      quoteNumber: "ABQ-2026-019",
+      opportunity: "Fictional coastal service shelter proposal",
+      version: 1,
+      status: "REJECTED" as const,
+      current: true,
+      discount: "0",
+      issueDate: new Date("2026-10-04T09:00:00.000Z"),
+      items: [{ sku: "AB-SRV-001", quantity: "30" }],
+    },
+    {
+      quoteNumber: "ABQ-2026-020",
+      opportunity: "Fictional fleet tyre supply",
+      version: 1,
+      status: "ACCEPTED" as const,
+      current: true,
+      discount: "4.17",
+      issueDate: new Date("2026-10-10T09:00:00.000Z"),
+      items: [{ sku: "AB-TYR-002", quantity: "80" }],
+    },
+    {
+      quoteNumber: "ABQ-2026-021",
+      opportunity: "Fictional regional fleet battery framework",
+      version: 1,
+      status: "ACCEPTED" as const,
+      current: true,
+      discount: "2",
+      issueDate: new Date("2026-10-14T09:00:00.000Z"),
+      items: [{ sku: "AB-BAT-003", quantity: "2500" }],
     },
   ];
   const quoteIds = new Map<string, number>();
@@ -1032,7 +1360,7 @@ try {
         `${quotationData.quoteNumber}-${quotationData.version}`,
         existing.id,
       );
-      if (quotationData.current)
+      if (existing.current)
         await prisma.opportunity.update({
           where: { id: existing.opportunityId },
           data: { estimatedAmount: existing.totalAmount, currency: "KES" },
@@ -1072,11 +1400,9 @@ try {
       .toDecimalPlaces(2);
     const totalAmount = subtotal.minus(discountAmount).toDecimalPlaces(2);
     const issued = quotationData.status !== "DRAFT";
-    const issuedAt = new Date(
-      quotationData.quoteNumber.includes("2025")
-        ? "2025-07-15T09:00:00.000Z"
-        : "2026-10-26T09:00:00.000Z",
-    );
+    const issuedAt = "issueDate" in quotationData
+      ? quotationData.issueDate
+      : new Date(quotationData.quoteNumber.includes("2025") ? "2025-07-15T09:00:00.000Z" : "2026-10-26T09:00:00.000Z");
     const created = await prisma.quotation.create({
       data: {
         quoteNumber: quotationData.quoteNumber,
@@ -1122,6 +1448,20 @@ try {
         where: { id: opportunity.id },
         data: { estimatedAmount: totalAmount, currency: "KES" },
       });
+  }
+
+  for (const opportunity of seededOpportunities.values()) {
+    const currentQuotation = await prisma.quotation.findFirst({
+      where: { opportunityId: opportunity.id, current: true },
+      orderBy: [{ version: "desc" }, { id: "desc" }],
+      select: { totalAmount: true, currency: true },
+    });
+    if (currentQuotation) {
+      await prisma.opportunity.update({
+        where: { id: opportunity.id },
+        data: { estimatedAmount: currentQuotation.totalAmount, currency: currentQuotation.currency },
+      });
+    }
   }
 
   console.log(

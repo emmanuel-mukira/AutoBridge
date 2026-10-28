@@ -18,8 +18,14 @@ import { useOpportunityOwners, useOpportunityProducts } from "@/features/opportu
 import type { OpportunityStage } from "@/features/opportunities/services/opportunitiesApi";
 import { opportunityStageClass, opportunityStageLabels, salesRouteLabels } from "@/features/opportunities/utils/labels";
 import { formatMoney } from "@/lib/currency";
+import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from "recharts";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 
 const stages: OpportunityStage[] = ["NEW", "QUALIFYING", "PROPOSAL", "NEGOTIATION", "CLOSED"];
+const performanceConfig = {
+  won: { label: "Won", color: "hsl(var(--chart-2))" },
+  lost: { label: "Lost", color: "hsl(var(--chart-5))" },
+} satisfies ChartConfig;
 
 function WinRateBreakdown({
   title,
@@ -34,14 +40,20 @@ function WinRateBreakdown({
     <Card className="h-full">
       <CardHeader><CardTitle className="text-base">{title}</CardTitle><CardDescription>{description}</CardDescription></CardHeader>
       <CardContent>
-        {rows.length === 0 ? <p className="text-sm text-muted-foreground">No resolved opportunities in this period.</p> : (
-          <div className="space-y-3">{rows.map((row) => (
-            <div key={row.key} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-b pb-3 last:border-0 last:pb-0">
-              <div className="min-w-0"><p className="truncate text-sm font-medium">{row.label}</p><p className="text-xs text-muted-foreground">{row.won} Won · {row.lost} Lost · {row.resolved} resolved</p></div>
-              <span className="text-sm font-semibold tabular-nums">{row.winRate === null ? "—" : `${row.winRate}%`}</span>
-            </div>
-          ))}</div>
-        )}
+        {rows.filter((row) => row.resolved > 0).length === 0 ? <p className="text-sm text-muted-foreground">No completed sales outcomes in this period.</p> : <>
+          <ChartContainer config={performanceConfig} className="w-full" style={{ height: Math.min(240, Math.max(130, rows.filter((row) => row.resolved > 0).length * 44)) }}>
+            <BarChart accessibilityLayer data={rows.filter((row) => row.resolved > 0).map((row) => ({ ...row, rateLabel: `${row.winRate}% (${row.resolved})` }))} layout="vertical" margin={{ left: 0, right: 64 }}>
+              <CartesianGrid horizontal={false} />
+              <XAxis type="number" allowDecimals={false} hide />
+              <YAxis dataKey="label" type="category" tickLine={false} axisLine={false} width={115} tick={{ fontSize: 11 }} />
+              <ChartTooltip content={<ChartTooltipContent />} />
+              <Bar dataKey="won" stackId="outcomes" fill="var(--color-won)" radius={[4, 0, 0, 4]} />
+              <Bar dataKey="lost" stackId="outcomes" fill="var(--color-lost)" radius={[0, 4, 4, 0]}><LabelList dataKey="rateLabel" position="right" className="fill-foreground text-[10px]" /></Bar>
+            </BarChart>
+          </ChartContainer>
+          <p className="mt-2 text-xs text-muted-foreground">Bars show Won and Lost counts. Labels show win rate and completed opportunities (Won + Lost).</p>
+        </>}
+        {rows.filter((row) => row.resolved === 0).map((row) => <p key={row.key} className="mt-2 text-xs text-muted-foreground">{row.label}: No completed sales outcomes</p>)}
       </CardContent>
     </Card>
   );

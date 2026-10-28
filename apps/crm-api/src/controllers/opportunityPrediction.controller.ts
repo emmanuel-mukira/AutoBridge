@@ -15,6 +15,7 @@ function scoringError(error: unknown, res: Response) {
     ML_UNAVAILABLE: [503, "Prediction service is unavailable. No prediction was saved"],
     ML_REJECTED_INPUT: [422, "Prediction inputs are not supported by the active model"],
     ML_INVALID_RESPONSE: [502, "Prediction service returned an invalid response. No prediction was saved"],
+    SCORING_INPUTS_CHANGED: [409, "Scoring inputs changed during prediction. Refresh and try again"],
   };
   const mapped = errors[error.message];
   if (!mapped) return false;
@@ -28,7 +29,7 @@ export async function score(req: Request, res: Response, next: NextFunction) {
   try {
     const prediction = await service.score(req.user!, id.data.id);
     if (!prediction) return void res.status(404).json({ error: "Opportunity not found or access denied" });
-    res.status(201).json({ ...prediction, wonProbability: prediction.wonProbability.toString() });
+    res.status(prediction.reused ? 200 : 201).json({ ...prediction, wonProbability: prediction.wonProbability.toString() });
   } catch (error) { if (!scoringError(error, res)) next(error); }
 }
 

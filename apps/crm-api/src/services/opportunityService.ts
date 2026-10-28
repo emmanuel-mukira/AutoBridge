@@ -19,6 +19,12 @@ import {
   quotationTotals,
   validatePrincipalCategory,
 } from "./quotationPricing.js";
+import { ClientSalesHistoryService } from "./clientSalesHistoryService.js";
+import {
+  buildCurrentScoringInput,
+  type CurrentScoringInput,
+  predictionMatchesCurrentInput,
+} from "./opportunityScoringInputs.js";
 
 const stages = [
   "NEW",
@@ -49,6 +55,8 @@ const listInclude = {
     take: 1,
     select: {
       wonProbability: true,
+      modelVersion: true,
+      adapterVersion: true,
       modelVariant: true,
       predictedAt: true,
       inputSnapshot: true,
@@ -57,49 +65,16 @@ const listInclude = {
 } satisfies Prisma.OpportunityInclude;
 
 function latestPredictionSummary(
-  opportunity: {
-    estimatedAmount: Prisma.Decimal;
-    currency: string;
-    routeToMarket: string | null;
-    productSubgroupId: number | null;
-    outcome: string | null;
-    predictions: Array<{
-      wonProbability: Prisma.Decimal;
-      modelVariant: string;
-      predictedAt: Date;
-      inputSnapshot: Prisma.JsonValue;
-    }>;
-  },
-  revenueChangedAt?: Date,
+  opportunity: Prisma.OpportunityGetPayload<{ include: typeof listInclude }>,
+  current: CurrentScoringInput | null,
 ) {
   const prediction = opportunity.predictions[0];
   if (!prediction) return null;
-  const snapshot =
-    prediction.inputSnapshot &&
-    typeof prediction.inputSnapshot === "object" &&
-    !Array.isArray(prediction.inputSnapshot)
-      ? (prediction.inputSnapshot as Prisma.JsonObject)
-      : null;
-  const saved =
-    snapshot?.opportunity &&
-    typeof snapshot.opportunity === "object" &&
-    !Array.isArray(snapshot.opportunity)
-      ? (snapshot.opportunity as Prisma.JsonObject)
-      : null;
-  const inputChanged =
-    !saved ||
-    saved.estimatedAmount !== opportunity.estimatedAmount.toString() ||
-    saved.currency !== opportunity.currency ||
-    saved.routeToMarket !== opportunity.routeToMarket ||
-    saved.productSubgroupId !== opportunity.productSubgroupId;
   return {
     wonProbability: prediction.wonProbability.toString(),
     modelVariant: prediction.modelVariant,
     predictedAt: prediction.predictedAt,
-    stale:
-      Boolean(opportunity.outcome) ||
-      inputChanged ||
-      Boolean(revenueChangedAt && revenueChangedAt > prediction.predictedAt),
+    stale: opportunity.outcome ? false : !current || !predictionMatchesCurrentInput(prediction, current),
   };
 }
 
@@ -131,6 +106,7 @@ function confirmedSaleData(input: ConfirmedSaleInput, confirmedAt: Date) {
 }
 
 export class OpportunityService {
+  private salesHistory = new ClientSalesHistoryService();
   private async validateReferences(
     actor: ClientActor,
     clientId: number,
@@ -265,61 +241,26 @@ export class OpportunityService {
       }),
       prisma.opportunity.count({ where }),
     ]);
-    const scored = opportunities.filter(
-      (opportunity) => opportunity.predictions[0],
+    const asOf = new Date();
+    const evidenceByClient = await this.salesHistory.evidenceForClients(
+      actor,
+      opportunities.map((opportunity) => opportunity.clientId),
+      asOf,
     );
-    const earliestPrediction = scored.reduce<Date | null>(
-      (earliest, opportunity) => {
-        const predictedAt = opportunity.predictions[0]!.predictedAt;
-        return !earliest || predictedAt < earliest ? predictedAt : earliest;
-      },
-      null,
-    );
-    const changedAtByClient = new Map<number, Date>();
-    if (earliestPrediction) {
-      const clientIds = [
-        ...new Set(scored.map((opportunity) => opportunity.clientId)),
-      ];
-      const [summaries, sales] = await Promise.all([
-        prisma.clientRevenueSummary.findMany({
-          where: {
-            clientId: { in: clientIds },
-            verifiedAt: { gt: earliestPrediction },
-          },
-          select: { clientId: true, verifiedAt: true },
-        }),
-        prisma.opportunity.findMany({
-          where: {
-            clientId: { in: clientIds },
-            outcome: "WON",
-            updatedAt: { gt: earliestPrediction },
-          },
-          select: { clientId: true, updatedAt: true },
-        }),
-      ]);
-      for (const row of [
-        ...summaries.map((row) => ({
-          clientId: row.clientId,
-          changedAt: row.verifiedAt,
-        })),
-        ...sales.map((row) => ({
-          clientId: row.clientId,
-          changedAt: row.updatedAt,
-        })),
-      ]) {
-        const current = changedAtByClient.get(row.clientId);
-        if (!current || row.changedAt > current)
-          changedAtByClient.set(row.clientId, row.changedAt);
-      }
-    }
     return {
-      opportunities: opportunities.map(({ predictions, ...opportunity }) => ({
-        ...opportunity,
-        latestPrediction: latestPredictionSummary(
-          { ...opportunity, predictions },
-          changedAtByClient.get(opportunity.clientId),
-        ),
-      })),
+      opportunities: opportunities.map((opportunity) => {
+        const evidence = evidenceByClient.get(opportunity.clientId);
+        const current = !opportunity.outcome && opportunity.routeToMarket && opportunity.productSubgroup && evidence
+          && !evidence.reviewReason && (evidence.state === "UNKNOWN" || evidence.ibmRevenueCode !== null)
+          ? buildCurrentScoringInput(
+              opportunity as typeof opportunity & { routeToMarket: NonNullable<typeof opportunity.routeToMarket>; productSubgroup: NonNullable<typeof opportunity.productSubgroup> },
+              evidence,
+              asOf,
+            )
+          : null;
+        const { predictions, ...row } = opportunity;
+        return { ...row, latestPrediction: latestPredictionSummary(opportunity, current) };
+      }),
       pagination: {
         page: filters.page,
         limit: filters.limit,
