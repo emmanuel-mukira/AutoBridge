@@ -24,7 +24,7 @@ export function PasswordStrengthIndicator({ password }: PasswordStrengthIndicato
           <span className={`text-xs font-semibold ${strength.color}`}>{strength.label}</span>
         </div>
         <div className="flex gap-1">
-          {Array.from({ length: 5 }).map((_, i) => (
+          {Array.from({ length: PASSWORD_RULES.length }).map((_, i) => (
             <div
               key={i}
               className={`h-1.5 flex-1 rounded-full transition-colors duration-200 ${

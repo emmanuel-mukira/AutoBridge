@@ -52,7 +52,8 @@ export function useScoreOpportunity() {
         queryKey: keys.predictions(prediction.opportunityId),
       });
       client.invalidateQueries({ queryKey: keys.all });
-      toast.success("Win probability generated");
+      client.invalidateQueries({ queryKey: ["analytics", "decision-support"] });
+      toast.success(prediction.message ?? (prediction.reused ? "The current win probability is already up to date" : "Win probability generated"));
     },
     onError: (error) => toast.error(error.message),
   });

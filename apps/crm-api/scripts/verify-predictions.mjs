@@ -46,7 +46,7 @@ try {
   assert.ok(process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD && process.env.ML_API_URL && process.env.ML_API_TOKEN);
   assert.equal((await request("/api/opportunities/1/score", "POST")).response.status, 401);
   const admin = await signIn(process.env.ADMIN_EMAIL, process.env.ADMIN_PASSWORD);
-  const outsider = await signIn("samuel.sales@autobridge.test", process.env.ADMIN_PASSWORD);
+  const outsider = await signIn("samuel@autobridge.local", process.env.ADMIN_PASSWORD);
   const products = await request("/api/opportunities/products", "GET", undefined, admin);
   const subgroup = products.data.productGroups.find((group) => group.name === "Car Accessories").subgroups.find((item) => item.name === "Replacement Parts");
   catalogueProduct = (await request(`/api/products?productSubgroupId=${subgroup.id}`, "GET", undefined, admin)).data.products[0];
@@ -62,13 +62,17 @@ try {
   const historical = await prisma.opportunity.create({ data: { clientId: positiveClient.id, ownerId: admin.user.id, productSubgroupId: subgroup.id, title: `Historical ${suffix}`, estimatedAmount: "1300", currency: "USD", routeToMarket: "RESELLER" } });
   created.opportunities.push(historical.id);
   await prisma.opportunity.update({ where: { id: historical.id }, data: { stage: "CLOSED", outcome: "WON", outcomeAt: new Date(Date.now() - 365 * 86_400_000), confirmedAmount: "1000", confirmedCurrency: "USD", confirmedAmountUsd: "1000", confirmedQuoteUnitsPerUsd: "1", confirmedRateSource: "USD identity conversion", confirmedRateObservedAt: new Date(Date.now() - 365 * 86_400_000), confirmedAt: new Date(Date.now() - 365 * 86_400_000) } });
-  await addCoverage(positiveClient.id, admin.user.id, "1000");
   await addCoverage(zeroClient.id, admin.user.id);
 
   const primaryPositive = await request(`/api/opportunities/${positive.id}/score`, "POST", {}, admin);
   assert.equal(primaryPositive.response.status, 201);
   assert.equal(primaryPositive.data.modelVariant, "PRIMARY");
+  assert.ok(primaryPositive.data.revenueSummaryId);
+  assert.equal(primaryPositive.data.inputSnapshot.revenueEvidence.coverageId, primaryPositive.data.revenueSummaryId);
   assert.equal(primaryPositive.data.inputSnapshot.revenueEvidence.ibmRevenueCode, 1);
+  const automaticSummary = await prisma.clientRevenueSummary.findUnique({ where: { id: primaryPositive.data.revenueSummaryId } });
+  assert.equal(automaticSummary.evidenceSource, "Automatically calculated from confirmed Won opportunities");
+  assert.equal(automaticSummary.amount.toString(), "1000");
   assert.equal(primaryPositive.data.explanation.status, "available");
   assert.equal(primaryPositive.data.explanation.explainer.class_label, "Won");
   assert.ok(primaryPositive.data.explanation.additivity_error <= 1e-6);
@@ -84,16 +88,31 @@ try {
   assert.equal(fallback.data.inputSnapshot.revenueEvidence.state, "UNKNOWN");
   assert.equal(fallback.data.explanation.status, "available");
   assert.deepEqual(fallback.data.explanation.contributions.map((item) => item.feature).sort(), Object.keys(fallback.data.inputSnapshot.modelReadyFeatures).sort());
-  assert.equal((await request(`/api/opportunities/${unknown.id}/score`, "POST", {}, admin)).response.status, 201);
+  const mlUrl = process.env.ML_API_URL;
+  process.env.ML_API_URL = "http://127.0.0.1:9";
+  const unchanged = await request(`/api/opportunities/${unknown.id}/score`, "POST", {}, admin);
+  assert.equal(unchanged.response.status, 200);
+  assert.equal(unchanged.data.reused, true);
+  assert.match(unchanged.data.message, /already up to date/i);
+  process.env.ML_API_URL = mlUrl;
   assert.equal((await request(`/api/opportunities/${incomplete.id}/score`, "POST", {}, admin)).response.status, 422);
   assert.equal((await request(`/api/opportunities/${positive.id}/predictions`, "GET", undefined, outsider)).response.status, 404);
 
   let history = await request(`/api/opportunities/${unknown.id}/predictions`, "GET", undefined, admin);
-  assert.equal(history.data.history.length, 2);
+  assert.equal(history.data.history.length, 1);
   assert.equal(history.data.latest.stale, false);
   assert.deepEqual((await prisma.opportunityPrediction.findUnique({ where: { id: fallback.data.id }, select: { explanation: true } })).explanation, fallback.data.explanation);
   let listing = await request("/api/opportunities?limit=100", "GET", undefined, admin);
   assert.equal(listing.data.opportunities.find((item) => item.id === unknown.id).latestPrediction.stale, false);
+  let decisionSupport = await request("/api/analytics/decision-support?limit=50", "GET", undefined, admin);
+  assert.equal(decisionSupport.data.opportunities.find((item) => item.id === unknown.id).predictionStatus, "CURRENT");
+  const scopedDecisionSupport = await request(`/api/analytics/decision-support?stage=NEW&startDate=${encodeURIComponent(new Date(Date.now() - 60_000).toISOString())}&endDate=${encodeURIComponent(new Date(Date.now() + 60_000).toISOString())}&limit=50`, "GET", undefined, admin);
+  assert.equal(scopedDecisionSupport.response.status, 200);
+  assert.ok(scopedDecisionSupport.data.opportunities.some((item) => item.id === unknown.id));
+  assert.ok(scopedDecisionSupport.data.opportunities.every((item) => item.id !== positive.id || item.owner.id === admin.user.id));
+  const repDecisionSupport = await request("/api/analytics/decision-support?limit=50", "GET", undefined, outsider);
+  assert.ok(repDecisionSupport.data.opportunities.every((item) => item.owner.id === outsider.user.id));
+  assert.equal((await request("/api/analytics/decision-support?stage=CLOSED", "GET", undefined, admin)).response.status, 400);
   assert.equal(listing.data.opportunities.find((item) => item.id === incomplete.id).latestPrediction, null);
   const unknownQuotes = await request(`/api/quotations?opportunityId=${unknown.id}`, "GET", undefined, admin);
   const unknownDraft = unknownQuotes.data.quotations[0];
@@ -102,12 +121,36 @@ try {
   assert.equal(history.data.latest.stale, true);
   listing = await request("/api/opportunities?limit=100", "GET", undefined, admin);
   assert.equal(listing.data.opportunities.find((item) => item.id === unknown.id).latestPrediction.stale, true);
+  decisionSupport = await request("/api/analytics/decision-support?limit=50", "GET", undefined, admin);
+  assert.equal(decisionSupport.data.opportunities.find((item) => item.id === unknown.id).predictionStatus, "STALE");
+  const rescored = await request(`/api/opportunities/${unknown.id}/score`, "POST", {}, admin);
+  assert.equal(rescored.response.status, 201);
+  assert.equal(rescored.data.reused, false);
+  history = await request(`/api/opportunities/${unknown.id}/predictions`, "GET", undefined, admin);
+  assert.equal(history.data.history.length, 2);
+  assert.equal(history.data.latest.stale, false);
   assert.equal((await prisma.opportunity.findUnique({ where: { id: unknown.id } })).outcome, null);
 
+  const finalQuotation = await request(`/api/quotations/${unknownDraft.id}`, "PATCH", { contactId: null, validUntil: new Date(Date.now() + 8 * 86_400_000).toISOString(), discountPercent: "0", items: [{ productId: catalogueProduct.id, quantity: "4" }] }, admin);
+  assert.equal(finalQuotation.response.status, 200);
   const beforeFailure = await prisma.opportunityPrediction.count({ where: { opportunityId: unknown.id } });
   process.env.ML_API_URL = "http://127.0.0.1:9";
   await assert.rejects(() => new OpportunityScoringService().score(admin.user, unknown.id), /ML_UNAVAILABLE/);
   assert.equal(await prisma.opportunityPrediction.count({ where: { opportunityId: unknown.id } }), beforeFailure);
+  process.env.ML_API_URL = mlUrl;
+  const predictionAtOutcome = await request(`/api/opportunities/${unknown.id}/score`, "POST", {}, admin);
+  assert.equal(predictionAtOutcome.response.status, 201);
+  const closed = await request(`/api/opportunities/${unknown.id}/stage`, "PATCH", {
+    stage: "CLOSED", outcome: "WON", confirmedAmount: finalQuotation.data.totalAmount, confirmedCurrency: "KES",
+  }, admin);
+  assert.equal(closed.response.status, 200);
+  history = await request(`/api/opportunities/${unknown.id}/predictions`, "GET", undefined, admin);
+  assert.equal(history.data.latest.stale, false);
+  assert.equal(history.data.latest.outcomeSnapshot, true);
+  decisionSupport = await request("/api/analytics/decision-support?limit=50", "GET", undefined, admin);
+  const monitoredOutcome = decisionSupport.data.outcomeMonitoring.opportunities.find((item) => item.id === unknown.id);
+  assert.equal(monitoredOutcome.outcome, "WON");
+  assert.equal(monitoredOutcome.wonProbability, Number(predictionAtOutcome.data.wonProbability));
 
   for (const prediction of [primaryPositive.data, primaryZero.data, fallback.data]) {
     assert.ok(Number(prediction.wonProbability) >= 0 && Number(prediction.wonProbability) <= 1);
@@ -116,14 +159,14 @@ try {
   const legacyHistory = await request(`/api/opportunities/${incomplete.id}/predictions`, "GET", undefined, admin);
   assert.equal(legacyHistory.data.history.find((item) => item.id === legacy.id).explanation, null);
 
-  console.log("PASS: primary/fallback SHAP persistence, legacy null explanations, auth, latest list summaries, staleness, outcome isolation and failed-inference persistence");
+  console.log("PASS: primary/fallback SHAP persistence, deduplication, freshness, pre-outcome monitoring, auth and failed-inference persistence");
 } finally {
   await prisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe('ALTER TABLE "OpportunityPrediction" DISABLE TRIGGER "OpportunityPrediction_immutable"');
     await tx.opportunityPrediction.deleteMany({ where: { opportunityId: { in: created.opportunities } } });
     await tx.$executeRawUnsafe('ALTER TABLE "OpportunityPrediction" ENABLE TRIGGER "OpportunityPrediction_immutable"');
   });
-  await prisma.clientRevenueSummary.deleteMany({ where: { id: { in: created.summaries } } });
+  await prisma.clientRevenueSummary.deleteMany({ where: { clientId: { in: created.clients } } });
   await prisma.quotation.deleteMany({ where: { opportunityId: { in: created.opportunities } } });
   await prisma.opportunity.deleteMany({ where: { id: { in: created.opportunities } } });
   await prisma.client.deleteMany({ where: { id: { in: created.clients } } });

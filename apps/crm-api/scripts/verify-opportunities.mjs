@@ -104,7 +104,6 @@ try {
   assert.equal(createdOpportunity.data.stage, "NEW");
   assert.equal(createdOpportunity.data.client.id, repClient.data.id);
   assert.equal(createdOpportunity.data.productSubgroup.id, subgroup.id);
-  assert.equal((await request(`/api/clients/${repClient.data.id}`, "PATCH", { ownerId: admin.user.id }, admin)).response.status, 409);
 
   const stored = await prisma.opportunity.findUnique({ where: { id: createdOpportunity.data.id } });
   assert.equal(stored?.estimatedAmount.toFixed(2), (Number(catalogueProduct.defaultSellingPrice) * 2).toFixed(2));
@@ -147,7 +146,7 @@ try {
   assert.equal((await request(`/api/opportunities/${adminOpportunity.data.id}/stage`, "PATCH", { stage: "QUALIFYING" }, rep)).response.status, 404);
   assert.ok((await request("/api/opportunities", "GET", undefined, admin)).data.opportunities.some((item) => item.id === createdOpportunity.data.id));
 
-  console.log("PASS: routes, validation, CSRF, ownership, reassignment guard, opportunity CRUD, forward stages, closure and persistence");
+  console.log("PASS: routes, validation, CSRF, ownership, opportunity CRUD, forward stages, closure and persistence");
 } finally {
   await prisma.quotation.deleteMany({ where: { opportunityId: { in: created.opportunities } } });
   await prisma.opportunity.deleteMany({ where: { id: { in: created.opportunities } } });

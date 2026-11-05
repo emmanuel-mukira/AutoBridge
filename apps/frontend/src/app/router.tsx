@@ -8,8 +8,11 @@ import ApplicationError from "../pages/ApplicationError";
 
 const Home = lazy(() => import("../pages/Home"));
 const Login = lazy(() => import("../pages/Login"));
+const Signup = lazy(() => import("../pages/Signup"));
+const ChangePassword = lazy(() => import("../pages/ChangePassword"));
 const Dashboard = lazy(() => import("../pages/Dashboard"));
 const DashboardOverview = lazy(() => import("../pages/dashboard/Overview"));
+const DecisionSupport = lazy(() => import("../pages/DecisionSupport"));
 const Clients = lazy(() => import("../pages/Clients"));
 const ClientDetails = lazy(() => import("../pages/ClientDetails"));
 const Opportunities = lazy(() => import("../pages/Opportunities"));
@@ -20,6 +23,7 @@ const Products = lazy(() => import("../pages/Products"));
 const Quotations = lazy(() => import("../pages/Quotations"));
 const QuotationDetails = lazy(() => import("../pages/QuotationDetails"));
 const NotFound = lazy(() => import("../pages/NotFound"));
+const AdminUsers = lazy(() => import("../pages/admin/AdminUsers"));
 
 const loaded = (element: React.ReactNode) => (
   <Suspense fallback={<LoadingFallback />}>{element}</Suspense>
@@ -39,6 +43,8 @@ export const router = createBrowserRouter([
           </GuestRoute>,
         ),
       },
+      { path: "/signup", element: loaded(<GuestRoute><Signup /></GuestRoute>) },
+      { path: "/change-password", element: loaded(<ProtectedRoute><ChangePassword /></ProtectedRoute>) },
       {
         path: "/dashboard",
         element: loaded(
@@ -48,6 +54,7 @@ export const router = createBrowserRouter([
         ),
         children: [
           { index: true, element: loaded(<DashboardOverview />) },
+          { path: "decision-support", element: loaded(<DecisionSupport />) },
           { path: "clients", element: loaded(<Clients />) },
           { path: "clients/:id", element: loaded(<ClientDetails />) },
           { path: "opportunities", element: loaded(<Opportunities />) },
@@ -60,6 +67,7 @@ export const router = createBrowserRouter([
           { path: "products", element: loaded(<Products />) },
           { path: "quotations", element: loaded(<Quotations />) },
           { path: "quotations/:id", element: loaded(<QuotationDetails />) },
+          { path: "users", element: loaded(<ProtectedRoute requireAdmin><AdminUsers /></ProtectedRoute>) },
         ],
       },
       { path: "*", element: loaded(<NotFound />) },

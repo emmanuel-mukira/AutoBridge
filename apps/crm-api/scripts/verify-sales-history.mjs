@@ -71,6 +71,10 @@ try {
   assert.equal(closedWon.response.status, 200);
   assert.equal(closedWon.data.confirmedAmountUsd, "1000");
   assert.equal((await request(`/api/opportunities/${lost.id}/stage`, "PATCH", { stage: "CLOSED", outcome: "LOST" }, owner)).response.status, 200);
+  const automaticHistory = await request(`/api/clients/${clientId}/sales-history`, "GET", undefined, owner);
+  assert.equal(automaticHistory.data.revenueEvidence.state, "VERIFIED_COMPLETE");
+  assert.equal(automaticHistory.data.revenueEvidence.amountUsd, "1000");
+  assert.equal(automaticHistory.data.revenueEvidence.coverage, null);
 
   assert.equal((await request(`/api/clients/${clientId}/sales-history`, "GET", undefined, outsider)).response.status, 404);
   assert.equal((await request(`/api/clients/${clientId}/revenue-coverage`, "POST", { declaration: "YES", confirmedComplete: true }, outsider)).response.status, 404);
@@ -121,7 +125,7 @@ try {
   const unsureHistory = await request(`/api/clients/${zeroClient.data.id}/sales-history`, "GET", undefined, owner);
   assert.equal(unsureHistory.data.revenueEvidence.state, "UNKNOWN");
 
-  console.log("PASS: automatic two-year coverage, confirmed Won values, verified zero, unknown/ownership rules, and corrections");
+  console.log("PASS: automatic confirmed-sale revenue, two-year boundaries, verified zero, unknown/ownership rules, and corrections");
 } finally {
   await prisma.clientRevenueSummary.deleteMany({ where: { id: { in: created.summaries } } });
   await prisma.quotation.deleteMany({ where: { opportunityId: { in: created.opportunities } } });

@@ -9,6 +9,7 @@ declare global {
         firstName: string;
         lastName: string;
         role: "ADMIN" | "SALES_REP";
+        mustChangePassword: boolean;
         sessionId: string;
         sessionToken: string;
         csrfHash: string;

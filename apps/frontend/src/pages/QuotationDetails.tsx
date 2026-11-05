@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { QuotationDialog } from "@/features/quotations/components/QuotationDialog";
 import { QuotationPrintButton } from "@/features/quotations/components/QuotationPrintButton";
+import { QuotationOutcomePrompt } from "@/features/quotations/components/QuotationOutcomePrompt";
+import { QuotationSendAction } from "@/features/quotations/components/QuotationSendAction";
+import { useOpportunity } from "@/features/opportunities/hooks/useOpportunities";
 import {
   useOpportunityQuotations,
   useQuotation,
@@ -21,6 +24,7 @@ export default function QuotationDetails() {
   const [editOpen, setEditOpen] = useState(false);
   const query = useQuotation(id);
   const quotation = query.data;
+  const opportunity = useOpportunity(quotation?.opportunityId ?? 0);
   const history = useOpportunityQuotations(quotation?.opportunityId ?? 0);
   const revise = useReviseQuotation(quotation?.opportunityId ?? 0);
   const transition = useUpdateQuotationStatus(quotation?.opportunityId ?? 0);
@@ -48,49 +52,62 @@ export default function QuotationDetails() {
                     {quotation.status[0] +
                       quotation.status.slice(1).toLowerCase()}
                   </Badge>
-                  {quotation.current && <Badge>Current value</Badge>}
+                  {quotation.current && <Badge>Current effective</Badge>}
+                  {quotation.status === "DRAFT" && !quotation.current && (
+                    <Badge variant="secondary">Unissued draft</Badge>
+                  )}
+                  {quotation.status === "SUPERSEDED" && (
+                    <Badge variant="secondary">Historical version</Badge>
+                  )}
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">
                   {quotation.clientNameSnapshot} · {quotation.opportunity.title}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {quotation.status === "DRAFT" && (
+                {opportunity.data &&
+                  quotation.status === "DRAFT" &&
+                  opportunity.data.stage !== "CLOSED" && (
                   <>
                     <Button variant="outline" onClick={() => setEditOpen(true)}>
                       <Pencil className="mr-2 h-4 w-4" />
                       Edit draft
                     </Button>
-                    <Button
-                      onClick={() => transition.mutate({ id, status: "SENT" })}
-                    >
-                      Issue quotation
-                    </Button>
+                    <QuotationSendAction
+                      quotation={quotation}
+                      opportunity={opportunity.data}
+                    />
                   </>
                 )}
-                {quotation.status === "SENT" && (
+                {opportunity.data?.stage === "NEGOTIATION" &&
+                  (quotation.status === "SENT" ||
+                    quotation.status === "REJECTED") && (
                   <>
                     <Button variant="outline" onClick={() => revise.mutate(id)}>
                       <CopyPlus className="mr-2 h-4 w-4" />
                       Create revision
                     </Button>
-                    <Button
-                      onClick={() =>
-                        transition.mutate({ id, status: "ACCEPTED" })
-                      }
-                    >
-                      Accept
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() =>
-                        transition.mutate({ id, status: "REJECTED" })
-                      }
-                    >
-                      Reject
-                    </Button>
+                    {quotation.status === "SENT" && (
+                      <>
+                        <Button
+                          onClick={() =>
+                            transition.mutate({ id, status: "ACCEPTED" })
+                          }
+                        >
+                          Accept
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() =>
+                            transition.mutate({ id, status: "REJECTED" })
+                          }
+                        >
+                          Reject
+                        </Button>
+                      </>
+                    )}
                   </>
-                )}
+                  )}
                 <QuotationPrintButton quotation={quotation} />
               </div>
             </CardHeader>
@@ -203,12 +220,21 @@ export default function QuotationDetails() {
               )}
             </CardContent>
           </Card>
+          {opportunity.data && (
+            <QuotationOutcomePrompt
+              quotation={quotation}
+              opportunity={opportunity.data}
+            />
+          )}
           <Card>
             <CardHeader>
               <CardTitle>Version history</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {history.data
+                ?.filter(
+                  (version) => version.quoteNumber === quotation.quoteNumber,
+                )
                 ?.sort((a, b) => b.version - a.version)
                 .map((version) => (
                   <Link
@@ -216,10 +242,19 @@ export default function QuotationDetails() {
                     to={`/dashboard/quotations/${version.id}`}
                     className={`flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 hover:bg-muted/40 ${version.id === id ? "border-primary" : ""}`}
                   >
-                    <span className="font-medium">
-                      Version {version.version} ·{" "}
-                      {version.status[0] +
-                        version.status.slice(1).toLowerCase()}
+                    <span>
+                      <span className="font-medium">
+                        Version {version.version} ·{" "}
+                        {version.status[0] +
+                          version.status.slice(1).toLowerCase()}
+                      </span>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {version.current
+                          ? "Current effective"
+                          : version.status === "DRAFT"
+                            ? "Unissued draft"
+                            : "Historical"}
+                      </span>
                     </span>
                     <span>{money(version.totalAmount)}</span>
                   </Link>

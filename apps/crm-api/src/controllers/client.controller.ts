@@ -44,7 +44,6 @@ export async function update(req: Request, res: Response, next: NextFunction) {
     res.json(client);
   } catch (error) {
     if (error instanceof Error && error.message === "OWNER_NOT_FOUND") return void res.status(400).json({ error: "Owner not found" });
-    if (error instanceof Error && error.message === "CLIENT_HAS_OPPORTUNITIES") return void res.status(409).json({ error: "Reassign the client only after its opportunities have been transferred" });
     next(error);
   }
 }

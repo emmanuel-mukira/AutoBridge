@@ -58,7 +58,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       where: { tokenHash: hashToken(token) },
       include: { user: true },
     });
-    if (!session || session.revokedAt || session.expiresAt <= new Date() || !session.user.active) {
+    if (!session || session.revokedAt || session.expiresAt <= new Date() || !session.user.active || !session.user.approvedAt) {
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
@@ -68,6 +68,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       firstName: session.user.firstName,
       lastName: session.user.lastName,
       role: session.user.role,
+      mustChangePassword: session.user.mustChangePassword,
       sessionId: session.id,
       sessionToken: token,
       csrfHash: session.csrfHash,

@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import {
+  ListQuotationSeriesSchema,
   ListQuotationsSchema,
   QuotationIdSchema,
   QuotationStatusSchema,
@@ -44,7 +45,11 @@ function quotationError(error: unknown, res: Response): boolean {
     },
     QUOTATION_NOT_REVISABLE: {
       status: 409,
-      message: "Only the current sent quotation can be revised",
+      message: "Only a sent or rejected quotation can be revised",
+    },
+    OPPORTUNITY_CLOSED: {
+      status: 409,
+      message: "Closed opportunities cannot create quotation revisions",
     },
     DRAFT_ALREADY_EXISTS: {
       status: 409,
@@ -78,6 +83,21 @@ export async function list(req: Request, res: Response, next: NextFunction) {
   }
 }
 
+export async function listSeries(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  const parsed = ListQuotationSeriesSchema.safeParse(req.query);
+  if (!parsed.success)
+    return void res.status(400).json({ error: "Invalid quotation filters" });
+  try {
+    res.json(await service.listSeries(req.user!, parsed.data));
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function getById(req: Request, res: Response, next: NextFunction) {
   const parsed = QuotationIdSchema.safeParse(req.params);
   if (!parsed.success)
@@ -98,12 +118,10 @@ export async function update(req: Request, res: Response, next: NextFunction) {
   const params = QuotationIdSchema.safeParse(req.params);
   const data = UpdateQuotationSchema.safeParse(req.body);
   if (!params.success || !data.success)
-    return void res
-      .status(400)
-      .json({
-        error: "Invalid quotation data",
-        details: data.success ? undefined : data.error.flatten().fieldErrors,
-      });
+    return void res.status(400).json({
+      error: "Invalid quotation data",
+      details: data.success ? undefined : data.error.flatten().fieldErrors,
+    });
   try {
     const quotation = await service.update(
       req.user!,

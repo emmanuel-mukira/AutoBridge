@@ -9,6 +9,7 @@ import * as controller from "../controllers/quotation.controller.js";
 const router = Router();
 router.use(requireAuth);
 router.get("/", controller.list);
+router.get("/series", controller.listSeries);
 router.get("/:id", controller.getById);
 router.patch("/:id", requireTrustedOrigin, requireCsrf, controller.update);
 router.post(

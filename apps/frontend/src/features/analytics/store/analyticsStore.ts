@@ -86,9 +86,9 @@ export const useAnalyticsStore = create<AnalyticsStore>((set) => ({
         to = toKenyaDate(year, month + 1, 0, 23, 59, 59, 999);
         break;
       case 'quarter': {
-        // Last 4 months (rolling window)
-        from = toKenyaDate(year, month - 3, 1, 0, 0, 0, 0);
-        to = toKenyaDate(year, month + 1, 0, 23, 59, 59, 999);
+        const quarterStartMonth = Math.floor(month / 3) * 3;
+        from = toKenyaDate(year, quarterStartMonth, 1, 0, 0, 0, 0);
+        to = toKenyaDate(year, quarterStartMonth + 3, 0, 23, 59, 59, 999);
         break;
       }
       case 'half-year':
@@ -97,9 +97,8 @@ export const useAnalyticsStore = create<AnalyticsStore>((set) => ({
         to = toKenyaDate(year, month + 1, 0, 23, 59, 59, 999);
         break;
       case 'year':
-        // Last 12 months (rolling window)
-        from = toKenyaDate(year, month - 11, 1, 0, 0, 0, 0);
-        to = toKenyaDate(year, month + 1, 0, 23, 59, 59, 999);
+        from = toKenyaDate(year, 0, 1, 0, 0, 0, 0);
+        to = toKenyaDate(year + 1, 0, 0, 23, 59, 59, 999);
         break;
       case 'max':
         from = toKenyaDate(2020, 0, 1, 0, 0, 0, 0);

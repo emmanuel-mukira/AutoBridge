@@ -49,12 +49,127 @@ function sumUsd(rows: Array<{ confirmedAmountUsd: Prisma.Decimal | null }>) {
   return rows.reduce((total, row) => total.plus(row.confirmedAmountUsd ?? 0), new Prisma.Decimal(0));
 }
 
+export function deriveRevenueEvidenceState(input: {
+  coverage: {
+    complete: boolean;
+    declaration: "YES" | "NO" | "NOT_SURE";
+    coverageStart: Date;
+    coverageEnd: Date;
+    amount: Prisma.Decimal;
+  } | null;
+  windowStart: Date;
+  asOf: Date;
+  windowRevenueUsd: Prisma.Decimal;
+  windowMissingCount: number;
+}) {
+  const recordedPositiveHistoryComplete = input.windowMissingCount === 0
+    && input.windowRevenueUsd.gt(0);
+  const declaredCoverageComplete = Boolean(
+    input.coverage?.complete
+    && input.coverage.declaration !== "NOT_SURE"
+    && input.coverage.coverageStart <= input.windowStart
+    && input.coverage.coverageEnd >= input.asOf
+    && input.windowMissingCount === 0
+    && input.coverage.amount.toDecimalPlaces(2).equals(input.windowRevenueUsd.toDecimalPlaces(2))
+    && (input.coverage.declaration === "NO" ? input.windowRevenueUsd.isZero() : !input.windowRevenueUsd.isZero()),
+  );
+  const evidenceComplete = recordedPositiveHistoryComplete || declaredCoverageComplete;
+  let ibmRevenueCode: 0 | 1 | 2 | 3 | 4 | null = null;
+  let reviewReason: string | null = null;
+  if (evidenceComplete) {
+    try { ibmRevenueCode = deriveIbmRevenueHistoryCode(input.windowRevenueUsd); }
+    catch (error) { reviewReason = error instanceof Error ? error.message : "Revenue evidence requires review"; }
+  }
+  return {
+    state: !evidenceComplete ? "UNKNOWN" as const : input.windowRevenueUsd.isZero() ? "VERIFIED_ZERO" as const : "VERIFIED_COMPLETE" as const,
+    amountUsd: evidenceComplete ? input.windowRevenueUsd.toString() : null,
+    ibmRevenueCode,
+    reviewReason,
+    coverageUsed: declaredCoverageComplete,
+  };
+}
+
 export class ClientSalesHistoryService {
   private async findClient(actor: ClientActor, clientId: number) {
     return prisma.client.findFirst({
       where: { ...clientAccess(actor), id: clientId },
       select: { id: true, businessName: true },
     });
+  }
+
+  async evidenceForClients(actor: ClientActor, clientIds: number[], asOf: Date) {
+    const uniqueIds = [...new Set(clientIds)];
+    if (!uniqueIds.length) return new Map<number, ReturnType<typeof deriveRevenueEvidenceState> & {
+      windowStart: Date;
+      windowEnd: Date;
+      coverage: { id: number } | null;
+    }>();
+    const windowStart = subYears(asOf, 2);
+    const accessibleClients = await prisma.client.findMany({
+      where: { ...clientAccess(actor), id: { in: uniqueIds } },
+      select: { id: true },
+    });
+    const accessibleIds = accessibleClients.map((client) => client.id);
+    const [coverages, sales] = await Promise.all([
+      prisma.clientRevenueSummary.findMany({
+        where: { clientId: { in: accessibleIds }, verifiedAt: { lte: asOf } },
+        orderBy: [{ verifiedAt: "desc" }, { id: "desc" }],
+      }),
+      prisma.opportunity.findMany({
+        where: { clientId: { in: accessibleIds }, outcome: "WON", outcomeAt: { gte: windowStart, lt: asOf } },
+        select: {
+          clientId: true,
+          confirmedAmount: true,
+          confirmedCurrency: true,
+          confirmedAmountUsd: true,
+          confirmedQuoteUnitsPerUsd: true,
+          confirmedRateSource: true,
+          confirmedRateObservedAt: true,
+          confirmedAt: true,
+        },
+      }),
+    ]);
+    const coverageByClient = new Map<number, (typeof coverages)[number]>();
+    for (const coverage of coverages) {
+      if (!coverageByClient.has(coverage.clientId)) coverageByClient.set(coverage.clientId, coverage);
+    }
+    const result = new Map<number, ReturnType<typeof deriveRevenueEvidenceState> & {
+      windowStart: Date;
+      windowEnd: Date;
+      coverage: { id: number } | null;
+    }>();
+    for (const clientId of accessibleIds) {
+      const clientSales = sales.filter((sale) => sale.clientId === clientId);
+      const completeSales = clientSales.filter((sale) =>
+        sale.confirmedAmount !== null
+        && sale.confirmedCurrency !== null
+        && sale.confirmedAmountUsd !== null
+        && sale.confirmedQuoteUnitsPerUsd !== null
+        && sale.confirmedRateSource !== null
+        && sale.confirmedRateObservedAt !== null
+        && sale.confirmedAt !== null
+        && sale.confirmedAt <= asOf,
+      );
+      const total = completeSales.reduce(
+        (sum, sale) => sum.plus(sale.confirmedAmountUsd ?? 0),
+        new Prisma.Decimal(0),
+      );
+      const coverage = coverageByClient.get(clientId) ?? null;
+      const derived = deriveRevenueEvidenceState({
+        coverage,
+        windowStart,
+        asOf,
+        windowRevenueUsd: total,
+        windowMissingCount: clientSales.length - completeSales.length,
+      });
+      result.set(clientId, {
+        ...derived,
+        windowStart,
+        windowEnd: asOf,
+        coverage: coverage && derived.coverageUsed ? { id: coverage.id } : null,
+      });
+    }
+    return result;
   }
 
   async get(actor: ClientActor, clientId: number, requestedAsOf?: string) {
@@ -93,21 +208,7 @@ export class ClientSalesHistoryService {
     }
     const totalConfirmedUsd = sumUsd(confirmedSales);
     const windowRevenueUsd = sumUsd(windowConfirmedSales);
-    const evidenceComplete = Boolean(
-      coverage?.complete
-      && coverage.declaration !== "NOT_SURE"
-      && coverage.coverageStart <= windowStart
-      && coverage.coverageEnd >= asOf
-      && windowMissingCount === 0
-      && coverage.amount.equals(windowRevenueUsd)
-      && (coverage.declaration === "NO" ? windowRevenueUsd.isZero() : !windowRevenueUsd.isZero()),
-    );
-    let ibmRevenueCode: 0 | 1 | 2 | 3 | 4 | null = null;
-    let reviewReason: string | null = null;
-    if (evidenceComplete) {
-      try { ibmRevenueCode = deriveIbmRevenueHistoryCode(windowRevenueUsd); }
-      catch (error) { reviewReason = error instanceof Error ? error.message : "Revenue evidence requires review"; }
-    }
+    const evidence = deriveRevenueEvidenceState({ coverage, windowStart, asOf, windowRevenueUsd, windowMissingCount });
 
     return {
       client,
@@ -125,12 +226,12 @@ export class ClientSalesHistoryService {
         },
       },
       revenueEvidence: {
-        state: !evidenceComplete ? "UNKNOWN" : windowRevenueUsd.isZero() ? "VERIFIED_ZERO" : "VERIFIED_COMPLETE",
+        state: evidence.state,
         windowStart: windowStart.toISOString(),
         windowEnd: asOf.toISOString(),
-        amountUsd: evidenceComplete ? windowRevenueUsd.toString() : null,
-        ibmRevenueCode,
-        reviewReason,
+        amountUsd: evidence.amountUsd,
+        ibmRevenueCode: evidence.ibmRevenueCode,
+        reviewReason: evidence.reviewReason,
         missingConfirmedCount: windowMissingCount,
         coverage: coverage ? {
           id: coverage.id,
