@@ -22,6 +22,7 @@ const detailInclude = {
       ownerId: true,
       clientId: true,
       productSubgroupId: true,
+      stage: true,
       owner: { select: { id: true, firstName: true, lastName: true } },
     },
   },
@@ -306,6 +307,8 @@ export class QuotationService {
   async revise(actor: ClientActor, id: number) {
     const source = await this.getById(actor, id);
     if (!source) return null;
+    if (source.opportunity.stage === "CLOSED")
+      throw new Error("OPPORTUNITY_CLOSED");
     if (source.status !== "SENT" && source.status !== "REJECTED")
       throw new Error("QUOTATION_NOT_REVISABLE");
     try {

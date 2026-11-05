@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Activity, AlertCircle, BriefcaseBusiness, CalendarCheck, CalendarClock, CircleDollarSign, Clock3, Target, Trophy } from "lucide-react";
+import { Activity, AlertCircle, BriefcaseBusiness, CalendarCheck, CalendarClock, CircleDollarSign, Clock3, Trophy } from "lucide-react";
 import { useAuth } from "@/app/auth/useAuth";
 import { useUIStore } from "@/app/store";
 import { StatusDistributionChart } from "@/components/dashboard/charts/StatusDistributionChart";
@@ -19,12 +19,12 @@ import type { OpportunityStage } from "@/features/opportunities/services/opportu
 import { opportunityStageClass, opportunityStageLabels, salesRouteLabels } from "@/features/opportunities/utils/labels";
 import { formatMoney } from "@/lib/currency";
 import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from "recharts";
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 
 const stages: OpportunityStage[] = ["NEW", "QUALIFYING", "PROPOSAL", "NEGOTIATION", "CLOSED"];
 const performanceConfig = {
-  won: { label: "Won", color: "hsl(var(--chart-2))" },
-  lost: { label: "Lost", color: "hsl(var(--chart-5))" },
+  won: { label: "Won", theme: { light: "#16a34a", dark: "#4ade80" } },
+  lost: { label: "Lost", theme: { light: "#e11d48", dark: "#fb7185" } },
 } satisfies ChartConfig;
 
 function WinRateBreakdown({
@@ -47,6 +47,7 @@ function WinRateBreakdown({
               <XAxis type="number" allowDecimals={false} hide />
               <YAxis dataKey="label" type="category" tickLine={false} axisLine={false} width={115} tick={{ fontSize: 11 }} />
               <ChartTooltip content={<ChartTooltipContent />} />
+              <ChartLegend content={<ChartLegendContent />} verticalAlign="top" />
               <Bar dataKey="won" stackId="outcomes" fill="var(--color-won)" radius={[4, 0, 0, 4]} />
               <Bar dataKey="lost" stackId="outcomes" fill="var(--color-lost)" radius={[0, 4, 4, 0]}><LabelList dataKey="rateLabel" position="right" className="fill-foreground text-[10px]" /></Bar>
             </BarChart>
@@ -96,7 +97,7 @@ export default function Overview() {
   const products = useOpportunityProducts();
   const data = analytics.data;
 
-  if (analytics.isLoading) return <div className="space-y-5"><Skeleton className="h-20 w-full" /><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">{Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-32" />)}</div><Skeleton className="h-96" /></div>;
+  if (analytics.isLoading) return <div className="space-y-5"><Skeleton className="h-20 w-full" /><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-20" />)}</div><Skeleton className="h-96" /></div>;
   if (analytics.isError || !data) return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Dashboard unavailable</AlertTitle><AlertDescription>{analytics.error instanceof Error ? analytics.error.message : "Unable to load operational analytics."}</AlertDescription></Alert>;
 
   const pipelineValue = formatMoney(Number(data.summary.openPipelineValueUsd), "USD", displayCurrency, Number(data.currencyBasis.kesPerUsd));
@@ -105,20 +106,19 @@ export default function Overview() {
       <AnalyticsHeader isAdmin={data.scope.isAdmin} lastUpdated={new Date(analytics.dataUpdatedAt)} />
 
       <Card>
-        <CardContent className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
-          {user?.role === "ADMIN" && <Select value={filters.ownerId?.toString() ?? "all"} onValueChange={(value) => setFilters((current) => ({ ...current, ownerId: value === "all" ? undefined : Number(value) }))}><SelectTrigger><SelectValue placeholder="All representatives" /></SelectTrigger><SelectContent><SelectItem value="all">All representatives</SelectItem>{owners.data?.map((owner) => <SelectItem key={owner.id} value={owner.id.toString()}>{owner.firstName} {owner.lastName}</SelectItem>)}</SelectContent></Select>}
-          <Select value={filters.stage ?? "all"} onValueChange={(value) => setFilters((current) => ({ ...current, stage: value === "all" ? undefined : value as OpportunityStage }))}><SelectTrigger><SelectValue placeholder="All stages" /></SelectTrigger><SelectContent><SelectItem value="all">All stages</SelectItem>{stages.map((stage) => <SelectItem key={stage} value={stage}>{opportunityStageLabels[stage]}</SelectItem>)}</SelectContent></Select>
-          <Select value={filters.outcome ?? "all"} onValueChange={(value) => setFilters((current) => ({ ...current, outcome: value === "all" ? undefined : value as "WON" | "LOST" }))}><SelectTrigger><SelectValue placeholder="All outcomes" /></SelectTrigger><SelectContent><SelectItem value="all">All outcomes</SelectItem><SelectItem value="WON">Won</SelectItem><SelectItem value="LOST">Lost</SelectItem></SelectContent></Select>
-          <Select value={filters.productGroupId?.toString() ?? "all"} onValueChange={(value) => setFilters((current) => ({ ...current, productGroupId: value === "all" ? undefined : Number(value) }))}><SelectTrigger><SelectValue placeholder="All product groups" /></SelectTrigger><SelectContent><SelectItem value="all">All product groups</SelectItem>{products.data?.map((group) => <SelectItem key={group.id} value={group.id.toString()}>{group.name}</SelectItem>)}</SelectContent></Select>
+        <CardContent className="flex flex-col gap-2 p-2.5 sm:flex-row sm:flex-wrap">
+          {user?.role === "ADMIN" && <Select value={filters.ownerId?.toString() ?? "all"} onValueChange={(value) => setFilters((current) => ({ ...current, ownerId: value === "all" ? undefined : Number(value) }))}><SelectTrigger className="h-8 text-xs sm:w-48"><SelectValue placeholder="All representatives" /></SelectTrigger><SelectContent><SelectItem value="all">All representatives</SelectItem>{owners.data?.map((owner) => <SelectItem key={owner.id} value={owner.id.toString()}>{owner.firstName} {owner.lastName}</SelectItem>)}</SelectContent></Select>}
+          <Select value={filters.stage ?? "all"} onValueChange={(value) => setFilters((current) => ({ ...current, stage: value === "all" ? undefined : value as OpportunityStage }))}><SelectTrigger className="h-8 text-xs sm:w-40"><SelectValue placeholder="All stages" /></SelectTrigger><SelectContent><SelectItem value="all">All stages</SelectItem>{stages.map((stage) => <SelectItem key={stage} value={stage}>{opportunityStageLabels[stage]}</SelectItem>)}</SelectContent></Select>
+          <Select value={filters.outcome ?? "all"} onValueChange={(value) => setFilters((current) => ({ ...current, outcome: value === "all" ? undefined : value as "WON" | "LOST" }))}><SelectTrigger className="h-8 text-xs sm:w-40"><SelectValue placeholder="All outcomes" /></SelectTrigger><SelectContent><SelectItem value="all">All outcomes</SelectItem><SelectItem value="WON">Won</SelectItem><SelectItem value="LOST">Lost</SelectItem></SelectContent></Select>
+          <Select value={filters.productGroupId?.toString() ?? "all"} onValueChange={(value) => setFilters((current) => ({ ...current, productGroupId: value === "all" ? undefined : Number(value) }))}><SelectTrigger className="h-8 text-xs sm:w-48"><SelectValue placeholder="All product groups" /></SelectTrigger><SelectContent><SelectItem value="all">All product groups</SelectItem>{products.data?.map((group) => <SelectItem key={group.id} value={group.id.toString()}>{group.name}</SelectItem>)}</SelectContent></Select>
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
-        <MetricCard title="Open pipeline value" value={pipelineValue} description="Current authorized open pipeline" icon={CircleDollarSign} />
-        <MetricCard title="Total opportunities" value={data.summary.totalOpportunities} description="Created in the selected period" icon={BriefcaseBusiness} />
-        <MetricCard title="Open opportunities" value={data.summary.openOpportunities} description="Current open pipeline" icon={Target} />
-        <MetricCard title="Won opportunities" value={data.summary.wonOpportunities} description="Outcome recorded in selected period" icon={Trophy} />
-        <MetricCard title="Opportunity win rate" value={data.summary.winRate === null ? "No resolved data" : `${data.summary.winRate}%`} description="Outcomes in period: Won ÷ (Won + Lost)" icon={CircleDollarSign} />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard compact title="Open pipeline value" value={pipelineValue} icon={CircleDollarSign} />
+        <MetricCard compact title="Total opportunities" value={data.summary.totalOpportunities} icon={BriefcaseBusiness} />
+        <MetricCard compact title="Won opportunities" value={data.summary.wonOpportunities} icon={Trophy} />
+        <MetricCard compact title="Opportunity win rate" value={data.summary.winRate === null ? "No resolved data" : `${data.summary.winRate}%`} icon={CircleDollarSign} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -135,10 +135,10 @@ export default function Overview() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard title="Interactions recorded" value={data.activities.interactionsRecorded} description="Occurred in the selected period" icon={Activity} />
-        <MetricCard title="Upcoming follow-ups" value={data.activities.upcomingFollowUps} description="Incomplete and due before period end" icon={CalendarClock} />
-        <MetricCard title="Overdue follow-ups" value={data.activities.overdueFollowUps} description="Incomplete and past due" icon={Clock3} />
-        <MetricCard title="Completed follow-ups" value={data.activities.completedFollowUps} description="Completed in the selected period" icon={CalendarCheck} />
+        <MetricCard compact title="Interactions recorded" value={data.activities.interactionsRecorded} icon={Activity} />
+        <MetricCard compact title="Upcoming follow-ups" value={data.activities.upcomingFollowUps} icon={CalendarClock} />
+        <MetricCard compact title="Overdue follow-ups" value={data.activities.overdueFollowUps} icon={Clock3} />
+        <MetricCard compact title="Completed follow-ups" value={data.activities.completedFollowUps} icon={CalendarCheck} />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">

@@ -1,5 +1,4 @@
 import { QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { queryClient } from '@/lib/query-client';
 import { useAuthActions } from './store';
 import { useEffect, useRef } from 'react';
@@ -38,8 +37,6 @@ export function Providers({ children }: ProvidersProps) {
       <SessionInitializer>
         {children}
       </SessionInitializer>
-      {/* Show React Query DevTools in development */}
-      {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
     </QueryClientProvider>
   );
 }

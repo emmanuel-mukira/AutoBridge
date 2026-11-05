@@ -25,12 +25,12 @@ if (
   !email ||
   !/^\S+@\S+\.\S+$/.test(email) ||
   !password ||
-  password.length < 8 ||
+  password.length < 6 ||
   !firstName ||
   !lastName
 ) {
   throw new Error(
-    "Set ADMIN_EMAIL, ADMIN_PASSWORD (8+ characters), ADMIN_FIRST_NAME and ADMIN_LAST_NAME in the API .env",
+    "Set ADMIN_EMAIL, ADMIN_PASSWORD (6+ characters), ADMIN_FIRST_NAME and ADMIN_LAST_NAME in the API .env",
   );
 }
 
@@ -407,6 +407,7 @@ try {
           lastName,
           passwordHash: await bcrypt.hash(password, 12),
           role: "ADMIN",
+          approvedAt: new Date(),
         },
       }));
   }
@@ -427,6 +428,8 @@ try {
         firstName,
         lastName,
         active: true,
+        approvedAt: admin.approvedAt ?? new Date(),
+        mustChangePassword: false,
         ...(passwordChanged
           ? { passwordHash: await bcrypt.hash(password, 12) }
           : {}),
@@ -447,7 +450,7 @@ try {
   async function ensureSalesRep(targetEmail: string, legacyEmail: string, repFirstName: string, repLastName: string) {
     const existing = await prisma.user.findFirst({ where: { email: { in: [targetEmail, legacyEmail] } } });
     if (existing && existing.role !== "SALES_REP") throw new Error(`${targetEmail} belongs to a non-sales user`);
-    if (!existing) return prisma.user.create({ data: { email: targetEmail, firstName: repFirstName, lastName: repLastName, passwordHash: await bcrypt.hash(password, 12), role: "SALES_REP" } });
+    if (!existing) return prisma.user.create({ data: { email: targetEmail, firstName: repFirstName, lastName: repLastName, passwordHash: await bcrypt.hash(password, 12), role: "SALES_REP", approvedAt: new Date() } });
     const passwordChanged = !(await bcrypt.compare(password, existing.passwordHash));
     return prisma.user.update({
       where: { id: existing.id },
@@ -456,6 +459,8 @@ try {
         firstName: repFirstName,
         lastName: repLastName,
         active: true,
+        approvedAt: existing.approvedAt ?? new Date(),
+        mustChangePassword: false,
         ...(passwordChanged ? { passwordHash: await bcrypt.hash(password, 12), sessions: { updateMany: { where: { revokedAt: null }, data: { revokedAt: new Date() } } } } : {}),
       },
     });

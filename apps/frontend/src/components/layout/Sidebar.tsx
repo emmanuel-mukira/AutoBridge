@@ -11,11 +11,13 @@ import {
   FileText,
   PackageSearch,
   BrainCircuit,
+  Users,
 } from "lucide-react";
 import { useAuth } from "@/app/auth/useAuth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useUIStore, useUIActions } from "@/app/store";
+import { AutoBridgeLogo } from "@/components/AutoBridgeLogo";
 
 type SidebarLinksProps = {
   collapsed?: boolean;
@@ -24,6 +26,7 @@ type SidebarLinksProps = {
 export const SidebarLinks = memo(function SidebarLinks({
   collapsed = false,
 }: SidebarLinksProps) {
+  const { user } = useAuth();
   const regularLinks = [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, end: true },
     { to: "/dashboard/decision-support", label: "Decision Support", icon: BrainCircuit },
@@ -41,6 +44,7 @@ export const SidebarLinks = memo(function SidebarLinks({
       icon: MessagesSquare,
     },
     { to: "/dashboard/follow-ups", label: "Follow-ups", icon: CalendarClock },
+    ...(user?.role === "ADMIN" ? [{ to: "/dashboard/users", label: "User Management", icon: Users }] : []),
   ];
 
   return (
@@ -95,9 +99,7 @@ export function Sidebar() {
         )}
       >
         {!collapsed && (
-          <Link to="/" className="flex items-center">
-            <span className="ml-2 text-lg font-semibold">AutoBridge CRM</span>
-          </Link>
+          <Link to="/" aria-label="AutoBridge home"><AutoBridgeLogo /></Link>
         )}
         <Button
           variant="ghost"

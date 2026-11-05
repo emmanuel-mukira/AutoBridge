@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertTriangle, BarChart3, BrainCircuit, CircleDollarSign, ExternalLink, LoaderCircle, Target } from "lucide-react";
+import { AlertTriangle, BarChart3, BrainCircuit, CircleCheck, CircleDollarSign, ExternalLink, LoaderCircle, Target } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, LabelList, XAxis, YAxis } from "recharts";
 import { useAuth } from "@/app/auth/useAuth";
 import { useUIStore } from "@/app/store";
@@ -80,23 +80,28 @@ export default function DecisionSupport() {
 
   return (
     <div className="space-y-6 pb-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Decision Support</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Current prediction coverage and indicative commercial prioritization for the open pipeline.</p>
-      </div>
-
-      <div className="flex flex-col gap-2 rounded-xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div><p className="text-sm font-medium">Reporting period</p><p className="text-xs text-muted-foreground">Open pipeline uses creation date; closed monitoring uses outcome date. All open keeps older active opportunities visible.</p></div>
-        <div className="flex flex-wrap rounded-lg border bg-muted/40 p-1">{periods.map((item) => <button key={item.value} type="button" aria-pressed={period === item.value} onClick={() => selectPeriod(item.value)} className={`rounded-md px-3 py-1.5 text-xs font-medium ${period === item.value ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{item.label}</button>)}</div>
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-bold tracking-tight">Decision Support</h1>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+            <p>Prediction coverage and commercial prioritization</p>
+            <span aria-hidden="true">•</span>
+            <div className="flex items-center font-medium text-emerald-700 dark:text-emerald-400">
+              <CircleCheck className="mr-1 h-3.5 w-3.5" />
+              Updated {new Date(overviewQuery.dataUpdatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-wrap self-start rounded-lg border bg-muted/40 p-1 md:self-auto">{periods.map((item) => <button key={item.value} type="button" aria-pressed={period === item.value} onClick={() => selectPeriod(item.value)} className={`rounded-md px-3 py-1.5 text-xs font-medium ${period === item.value ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>{item.label}</button>)}</div>
       </div>
 
       <section aria-labelledby="prediction-overview-heading">
         <h2 id="prediction-overview-heading" className="sr-only">Prediction overview</h2>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard title="Scoring coverage" value={coverage} description="Current predictions among eligible open opportunities" icon={Target} />
-          <MetricCard title="Needs attention" value={data.summary.needsAttention} description={`${data.summary.stalePredictions} stale · ${data.summary.unscoredOpportunities} not scored`} icon={AlertTriangle} />
-          <MetricCard title="Current predictions" value={data.summary.currentPredictions} description="One latest valid prediction per open opportunity" icon={BrainCircuit} />
-          <MetricCard title="Probability-weighted pipeline" value={money(data.summary.probabilityWeightedPipelineUsd)} description="Indicative measure; current scores only" icon={CircleDollarSign} />
+          <MetricCard compact title="Scoring coverage" value={coverage} icon={Target} />
+          <MetricCard compact title="Needs attention" value={data.summary.needsAttention} icon={AlertTriangle} />
+          <MetricCard compact title="Current predictions" value={data.summary.currentPredictions} icon={BrainCircuit} />
+          <MetricCard compact title="Probability-weighted pipeline" value={money(data.summary.probabilityWeightedPipelineUsd)} icon={CircleDollarSign} />
         </div>
       </section>
 
@@ -106,12 +111,12 @@ export default function DecisionSupport() {
             <div className="flex items-center justify-between gap-3"><CardTitle id="prioritization-heading">Opportunity prioritization</CardTitle>{tableQuery.isFetching && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><LoaderCircle className="h-3.5 w-3.5 animate-spin" /> Updating results</span>}</div>
             <CardDescription>Probability and weighted value are separate indicators. Follow-up urgency is operational and is not a model input.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-3 border-y bg-muted/20 p-4 sm:grid-cols-2 lg:grid-cols-5">
-            {user?.role === "ADMIN" && <Select value={filters.ownerId?.toString() ?? "all"} onValueChange={(value) => updateFilters({ ownerId: value === "all" ? undefined : Number(value) })}><SelectTrigger><SelectValue placeholder="All representatives" /></SelectTrigger><SelectContent><SelectItem value="all">All representatives</SelectItem>{owners.data?.map((owner) => <SelectItem key={owner.id} value={owner.id.toString()}>{owner.firstName} {owner.lastName}</SelectItem>)}</SelectContent></Select>}
-            <Select value={filters.productGroupId?.toString() ?? "all"} onValueChange={(value) => updateFilters({ productGroupId: value === "all" ? undefined : Number(value) })}><SelectTrigger><SelectValue placeholder="All product groups" /></SelectTrigger><SelectContent><SelectItem value="all">All product groups</SelectItem>{products.data?.map((group) => <SelectItem key={group.id} value={group.id.toString()}>{group.name}</SelectItem>)}</SelectContent></Select>
-            <Select value={filters.stage ?? "all"} onValueChange={(value) => updateFilters({ stage: value === "all" ? undefined : value as DecisionSupportFilters["stage"] })}><SelectTrigger><SelectValue placeholder="All open stages" /></SelectTrigger><SelectContent><SelectItem value="all">All open stages</SelectItem>{stages.map((stage) => <SelectItem key={stage} value={stage}>{opportunityStageLabels[stage]}</SelectItem>)}</SelectContent></Select>
-            <Select value={filters.predictionStatus ?? "all"} onValueChange={(value) => updateFilters({ predictionStatus: value === "all" ? undefined : value as PredictionStatus })}><SelectTrigger><SelectValue placeholder="All prediction states" /></SelectTrigger><SelectContent><SelectItem value="all">All prediction states</SelectItem><SelectItem value="CURRENT">Current</SelectItem><SelectItem value="STALE">Stale</SelectItem><SelectItem value="UNSCORED">Not scored</SelectItem></SelectContent></Select>
-            <Select value={filters.sort ?? "WEIGHTED_VALUE"} onValueChange={(value) => updateFilters({ sort: value as DecisionSupportFilters["sort"] })}><SelectTrigger><SelectValue placeholder="Sort opportunities" /></SelectTrigger><SelectContent><SelectItem value="WEIGHTED_VALUE">Highest weighted value</SelectItem><SelectItem value="PROBABILITY">Highest win probability</SelectItem><SelectItem value="VALUE">Highest opportunity value</SelectItem><SelectItem value="FOLLOW_UP">Follow-up urgency</SelectItem></SelectContent></Select>
+          <CardContent className="flex flex-col gap-2 border-y bg-muted/20 p-2.5 sm:flex-row sm:flex-wrap sm:justify-end">
+            {user?.role === "ADMIN" && <Select value={filters.ownerId?.toString() ?? "all"} onValueChange={(value) => updateFilters({ ownerId: value === "all" ? undefined : Number(value) })}><SelectTrigger className="h-8 text-xs sm:w-48"><SelectValue placeholder="All representatives" /></SelectTrigger><SelectContent><SelectItem value="all">All representatives</SelectItem>{owners.data?.map((owner) => <SelectItem key={owner.id} value={owner.id.toString()}>{owner.firstName} {owner.lastName}</SelectItem>)}</SelectContent></Select>}
+            <Select value={filters.productGroupId?.toString() ?? "all"} onValueChange={(value) => updateFilters({ productGroupId: value === "all" ? undefined : Number(value) })}><SelectTrigger className="h-8 text-xs sm:w-44"><SelectValue placeholder="All product groups" /></SelectTrigger><SelectContent><SelectItem value="all">All product groups</SelectItem>{products.data?.map((group) => <SelectItem key={group.id} value={group.id.toString()}>{group.name}</SelectItem>)}</SelectContent></Select>
+            <Select value={filters.stage ?? "all"} onValueChange={(value) => updateFilters({ stage: value === "all" ? undefined : value as DecisionSupportFilters["stage"] })}><SelectTrigger className="h-8 text-xs sm:w-40"><SelectValue placeholder="All open stages" /></SelectTrigger><SelectContent><SelectItem value="all">All open stages</SelectItem>{stages.map((stage) => <SelectItem key={stage} value={stage}>{opportunityStageLabels[stage]}</SelectItem>)}</SelectContent></Select>
+            <Select value={filters.predictionStatus ?? "all"} onValueChange={(value) => updateFilters({ predictionStatus: value === "all" ? undefined : value as PredictionStatus })}><SelectTrigger className="h-8 text-xs sm:w-44"><SelectValue placeholder="All prediction states" /></SelectTrigger><SelectContent><SelectItem value="all">All prediction states</SelectItem><SelectItem value="CURRENT">Current</SelectItem><SelectItem value="STALE">Stale</SelectItem><SelectItem value="UNSCORED">Not scored</SelectItem></SelectContent></Select>
+            <Select value={filters.sort ?? "WEIGHTED_VALUE"} onValueChange={(value) => updateFilters({ sort: value as DecisionSupportFilters["sort"] })}><SelectTrigger className="h-8 text-xs sm:w-48"><SelectValue placeholder="Sort opportunities" /></SelectTrigger><SelectContent><SelectItem value="WEIGHTED_VALUE">Highest weighted value</SelectItem><SelectItem value="PROBABILITY">Highest win probability</SelectItem><SelectItem value="VALUE">Highest opportunity value</SelectItem><SelectItem value="FOLLOW_UP">Follow-up urgency</SelectItem></SelectContent></Select>
           </CardContent>
           <div className="overflow-x-auto">
             <Table>

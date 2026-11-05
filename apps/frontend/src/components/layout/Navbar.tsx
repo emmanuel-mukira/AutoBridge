@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Menu, Bell, User } from "lucide-react";
+import { Menu, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { 
@@ -15,6 +15,7 @@ import { useAuth } from "@/app/auth/useAuth";
 import { SidebarLinks } from "./Sidebar";
 import { useUIActions, useUIStore } from "@/app/store";
 import { cn } from "@/lib/utils";
+import { AutoBridgeLogo } from "@/components/AutoBridgeLogo";
 
 function NavbarComponent() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
@@ -34,6 +35,7 @@ function NavbarComponent() {
     interactions: "Interactions",
     "follow-ups": "Follow-ups",
     "decision-support": "Decision Support",
+    users: "User Management",
     settings: "Settings",
   };
   const dashboardPageTitle = dashboardSection
@@ -80,7 +82,7 @@ function NavbarComponent() {
             </SheetTrigger>
             <SheetContent side="left" className="w-[240px] sm:w-[300px] p-0">
               <SheetHeader className="p-4 border-b text-left">
-                <SheetTitle>AutoBridge CRM</SheetTitle>
+                <SheetTitle><AutoBridgeLogo /></SheetTitle>
               </SheetHeader>
               <div className="py-4">
                 <nav className="flex flex-col gap-1 px-2">
@@ -90,12 +92,11 @@ function NavbarComponent() {
                   >
                     Home
                   </Link>
-                  <Link 
-                    to={user ? "/dashboard" : "/login"} 
-                    className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium hover:bg-muted"
-                  >
-                    Dashboard
-                  </Link>
+                  {onDashboard ? (
+                    <Link to="/dashboard" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium hover:bg-muted">Dashboard</Link>
+                  ) : (
+                    <a href="/#features" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium hover:bg-muted">Features</a>
+                  )}
                 </nav>
                 {onDashboard && (
                   <>
@@ -113,9 +114,14 @@ function NavbarComponent() {
 
         {/* Brand / Logo - Only show on non-dashboard pages */}
         {!onDashboard && (
-          <Link to="/" className="flex items-center gap-2 font-semibold">
-            <span className="text-lg">AutoBridge CRM</span>
-          </Link>
+          <Link to="/" aria-label="AutoBridge home"><AutoBridgeLogo /></Link>
+        )}
+
+        {!onDashboard && (
+          <nav className="ml-8 hidden items-center gap-6 text-sm font-medium text-muted-foreground sm:flex" aria-label="Primary navigation">
+            <Link to="/" className="transition-colors hover:text-foreground">Home</Link>
+            <a href="/#features" className="transition-colors hover:text-foreground">Features</a>
+          </nav>
         )}
 
         {onDashboard && (
@@ -124,7 +130,7 @@ function NavbarComponent() {
               {dashboardPageTitle}
             </p>
             <p className="hidden text-xs text-muted-foreground sm:block">
-              AutoBridge CRM
+              AutoBridge
             </p>
           </div>
         )}
@@ -143,6 +149,8 @@ function NavbarComponent() {
 
         {/* Right Actions */}
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
+          {onDashboard ? (
+            <>
           <Button
             variant="outline"
             size="sm"
@@ -167,12 +175,6 @@ function NavbarComponent() {
             <span className="sr-only">Toggle theme</span>
           </Button>
 
-          {/* Notifications Placeholder */}
-          <Button variant="ghost" size="icon" className="text-muted-foreground">
-            <Bell className="h-5 w-5" />
-            <span className="sr-only">Notifications</span>
-          </Button>
-
           {/* User Profile */}
           {user ? (
             <DropdownMenu>
@@ -190,11 +192,6 @@ function NavbarComponent() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate("/dashboard/settings")}>
-                  Settings
-                </DropdownMenuItem>
-                <DropdownMenuItem>Support</DropdownMenuItem>
-                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="text-red-600 dark:text-red-400">
                   Logout
                 </DropdownMenuItem>
@@ -204,6 +201,15 @@ function NavbarComponent() {
              <Link to="/login">
               <Button>Login</Button>
             </Link>
+          )}
+            </>
+          ) : user ? (
+            <Button asChild><Link to="/dashboard">Open Dashboard</Link></Button>
+          ) : (
+            <>
+              <Button asChild variant="ghost" className="hidden sm:inline-flex"><Link to="/login">Sign In</Link></Button>
+              <Button asChild><Link to="/signup">Get Started</Link></Button>
+            </>
           )}
         </div>
       </div>

@@ -130,10 +130,9 @@ export function QuotationSection({
                     />
                   </>
                 )}
-                {opportunity.stage === "NEGOTIATION" &&
+                {opportunity.stage !== "CLOSED" &&
                   (quotation.status === "SENT" ||
                     quotation.status === "REJECTED") && (
-                  <>
                     <Button
                       size="sm"
                       variant="outline"
@@ -143,7 +142,9 @@ export function QuotationSection({
                       <CopyPlus className="mr-2 h-4 w-4" />
                       Create revision
                     </Button>
-                    {quotation.status === "SENT" && (
+                  )}
+                {opportunity.stage === "NEGOTIATION" &&
+                  quotation.status === "SENT" && (
                       <>
                         <Button
                           size="sm"
@@ -171,8 +172,6 @@ export function QuotationSection({
                           Reject
                         </Button>
                       </>
-                    )}
-                  </>
                   )}
                 <QuotationPrintButton quotation={quotation} />
               </div>

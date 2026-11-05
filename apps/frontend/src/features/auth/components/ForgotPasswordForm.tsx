@@ -27,7 +27,7 @@ export function ForgotPasswordForm() {
         <div className="p-8 space-y-6">
           <div className="text-center space-y-3">
             <div className="mx-auto block w-fit" aria-label="brand">
-              <span className="text-xl font-semibold">AutoBridge CRM</span>
+              <span className="text-xl font-semibold">AutoBridge</span>
             </div>
             <div className="space-y-1">
               <h1 className="text-2xl font-bold tracking-tight">Check your email</h1>
@@ -57,7 +57,7 @@ export function ForgotPasswordForm() {
       <div className="p-8 space-y-6">
         <div className="text-center space-y-3">
           <div className="mx-auto block w-fit" aria-label="brand">
-            <span className="text-xl font-semibold">AutoBridge CRM</span>
+            <span className="text-xl font-semibold">AutoBridge</span>
           </div>
           <div className="space-y-1">
             <h1 className="text-2xl font-bold tracking-tight">Forgot password?</h1>

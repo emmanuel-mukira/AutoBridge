@@ -1,0 +1,30 @@
+{
+  "validation_results": [
+    {
+      "Experiment": "Original RF",
+      "ROC-AUC": 0.8208342938080624,
+      "Average Precision": 0.6076252737742988,
+      "Brier Score": 0.12920623294191633,
+      "F1": 0.5806451612903226,
+      "Runtime seconds": 12.671735244999581
+    },
+    {
+      "Experiment": "Engineered RF",
+      "ROC-AUC": 0.8209877888209578,
+      "Average Precision": 0.6082295950523401,
+      "Brier Score": 0.12909867503677047,
+      "F1": 0.578655745603469,
+      "Runtime seconds": 21.279759981001916
+    }
+  ],
+  "selected_candidate": "Engineered RF",
+  "selected_test_result": {
+    "ROC-AUC": 0.8144275791747356,
+    "Average Precision": 0.6029178844510323,
+    "Brier Score": 0.13076022252588348,
+    "F1": 0.5746768788894208
+  },
+  "tensorflow_status": "skipped: not installed",
+  "plot_status": "skipped: Matplotlib not installed",
+  "total_runtime_seconds": 35.06086211600086
+}

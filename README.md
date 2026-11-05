@@ -1,100 +1,70 @@
-# AutoBridge CRM
+# AutoBridge
 
-AutoBridge CRM is an in-development B2B automotive customer and opportunity
-management application. The repository contains a React frontend, an Express
-API, local PostgreSQL configuration, and IBM-trained opportunity-scoring
-research. The current application supports development login and customer
-workflows; broader CRM and prediction integration are still in progress.
+AutoBridge is an automotive sales opportunity management and decision-support application. It brings client and opportunity records, quotations, sales activity, reporting, and win-probability estimates into one workflow. Predictions support human judgment; they do not decide whether an opportunity is won or how it must be prioritized.
 
-The [supervisor results report](docs/supervisor-model-results.md) summarizes
-the two finalized Random Forest experiments and real sample predictions.
-The saved automotive model is in [models/automotive_v1](models/automotive_v1).
+## What the application includes
 
-## Application development
+- **Sales workflow:** clients and contacts, assigned opportunity ownership, pipeline stages and outcomes, product catalogue, versioned quotations, interactions, and follow-ups.
+- **Reporting:** an analytics dashboard for pipeline and completed sales, plus a decision-support dashboard that presents prediction coverage and indicative commercial prioritization.
+- **Prediction review:** saved win probabilities, the inputs and explanations used for each prediction, prediction history, and separate human reviews.
+- **Access control:** Sales Representatives work with records available to their role; administrators manage user accounts and assignments. The API enforces authorization rather than relying on the interface alone.
 
-Start PostgreSQL from the repository root with `docker compose up -d postgres`.
-Then run `npm run dev` independently in `apps/crm-api` and `apps/frontend`.
-Keep local database and administrator credentials in the ignored `.env` files;
-the sanitized examples show the required variable names. From
-`apps/crm-api`, `npm run seed:dev` runs the
-[central automotive seed](apps/crm-api/prisma/automotive/seed.ts) to prepare the
-local development administrator and three sample customers without resetting
-the database.
+Commercial priority, model probability, human review, and the final sales outcome are distinct. The primary model uses verified prior-client revenue; when that history is genuinely unavailable, the separately evaluated limited-history fallback can be used.
 
-## Earlier dataset audit
+## Repository guide
 
-The executed [IBM Watson notebook](notebooks/IBM_Watson_dataset.ipynb) audits the repository's
-[sales CSV](datasets/IBM-sales-opportunity.csv), compares leakage-aware baselines,
-and evaluates whether historical WON probabilities are useful. This earlier audit
-preceded the finalized [Lean 3](notebooks/07_ibm_final_model.ipynb) and
-[Automotive 5](notebooks/08_automotive_domain_analysis.ipynb) experiments.
+| Location | Purpose |
+|---|---|
+| [`apps/frontend`](apps/frontend) | React and Vite user interface |
+| [`apps/crm-api`](apps/crm-api) | Express API, Prisma schema, migrations, and development seed |
+| [`services/ml-api`](services/ml-api) | Internal FastAPI inference service |
+| [`models/automotive_v1`](models/automotive_v1) | Frozen primary and fallback model artifacts and metadata |
+| [`notebooks/08_automotive_domain_analysis.ipynb`](notebooks/08_automotive_domain_analysis.ipynb) | Authoritative model-development and evaluation notebook |
 
-## Run the earlier notebook locally
+PostgreSQL runs locally through [Docker Compose](docker-compose.yml). The frontend calls the Express API, which owns application rules and saved records; Express calls the internal ML service for scoring.
 
-Open the repository in VS Code/Jupyter, select a Python environment containing
-NumPy, pandas, matplotlib, scikit-learn and ipykernel, then run the notebook from
-top to bottom. Use the same environment for the notebook kernel and VS Code's
-Python interpreter to avoid misleading unresolved-import diagnostics.
+## Run locally
 
-Verified runtime: Python 3.12.3, NumPy 2.5.3, pandas 3.0.6,
-scikit-learn 1.9.1, matplotlib 3.11.2 and ipykernel 7.4.0.
-No package installations occur during notebook execution. XGBoost is optional
-and was **not installed/tested** in this run; SHAP is replaced by permutation
-importance. The grouped split takes roughly 90 seconds on the tested machine.
+You need Docker Compose, Node.js/npm, and Python 3 with a virtual environment. Create missing local configuration files from the sanitized templates; keep any existing `.env` files. Set your own database password, session secret, administrator seed credentials, and a matching `ML_API_TOKEN` in the API and ML-service environments. Do not commit populated `.env` files.
 
-The loader searches the current directory and its parents for the repository
-CSV. No upload or absolute machine path is required. In Colab, clone/mount the
-whole repository and change into its directory first; opening the notebook
-alone does not provide the CSV. Colab execution has not been tested.
+```bash
+cp -n .env.example .env
+cp -n apps/crm-api/.env.example apps/crm-api/.env
+cp -n services/ml-api/.env.example services/ml-api/.env
+docker compose up -d postgres
+```
 
-## Main findings
+From `apps/crm-api`, install dependencies, apply the existing migrations, generate Prisma Client, and start the API:
 
-- Raw data: **78,025 rows, 19 columns**, 22.59% Won, no blank missing values.
-	The valid competitor category `None` is preserved.
-- Remove 55 exact duplicate rows. Exclude 137 IDs with nonidentical records
-	(278 deduplicated rows), consistent with unconfirmed line items; retain
-	**77,692 single-record opportunities**. No opportunity ID crosses partitions.
-- The conservative registration-time model uses **Supplies Subgroup, Region,
-	Route To Market**. Even these inputs require the assumption that their recorded
-	values match registration-time values. Amount, client bands/history and
-	competitor status are evaluated separately as unverified timing assumptions.
-- Train/calibration/validation/test sets are separate. No calendar dates or
-	customer IDs support temporal or customer-level validation.
+```bash
+cd apps/crm-api
+npm ci
+npx prisma migrate deploy
+npx prisma generate
+npm run dev
+```
 
-### Conservative model comparison (validation)
+For a **local development database only**, `npm run seed:dev` creates the configured administrator and sample records after migration. It requires the `ADMIN_*` values in `apps/crm-api/.env` and does not belong in production setup.
 
-| Model | ROC-AUC | PR-AUC / AP | Brier ↓ |
-|---|---:|---:|---:|
-| Training-prevalence baseline | 0.5000 | 0.2253 | 0.1745 |
-| Logistic Regression | 0.6006 | 0.3021 | 0.1706 |
-| Random Forest | 0.6125 | 0.3067 | 0.1694 |
+Start the internal model service and frontend in separate terminals:
 
-The raw Random Forest was selected using validation Brier; sigmoid calibration
-did not improve it. On **15,539 held-out test opportunities**, ROC-AUC is
-**0.6188**, AP **0.3105**, Brier **0.1689** (prevalence baseline **0.1745**).
-At the validation-selected cutoff of 0.1844, precision is **0.2656**, recall
-**0.7523**, and F1 **0.3926**. This cutoff is not a business-policy recommendation.
+```bash
+cd services/ml-api
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
 
-Mean prediction **22.54%** matches observed wins **22.52%**; fixed-bin calibration
-error is **0.39 percentage points**. However, scores only span **3.3–42.5%** and
-the 40–50% bin contains just 14 opportunities. Good aggregate calibration does
-not imply strong ranking, reliable individual certainty, or support above 50%.
+```bash
+cd apps/frontend
+npm ci
+npm run dev
+```
 
-Adding amount and history assumptions raises Random Forest validation ROC-AUC
-to **0.8206**, but performance does not prove that those values were available
-before prediction. These models are not the approved primary baseline.
+Open `http://127.0.0.1:5173`. Check `http://127.0.0.1:3000/health` for the API and `http://127.0.0.1:8000/ready` for the loaded model service. The frontend's local Vite server proxies `/api` to Express. See the [ML service README](services/ml-api/README.md) for its inference contract and tests.
 
-## Decision: RETAIN conditionally
+## Model and project status
 
-Defensible for a bounded academic study of historical sales scoring, feature
-availability and calibration—not a deployment-ready early-stage scoring system.
-Verify source/provenance, usage rights, collection/sampling details and feature
-timing before making operational claims: none is established by the filename.
-No advertising, campaign uplift, email/SMS effectiveness, optimal contact channel
-or causal intervention effect is supported.
+Automotive v1 is a frozen Random Forest model with a five-input primary variant and a four-input limited-history fallback. [Notebook 08](notebooks/08_automotive_domain_analysis.ipynb) records the data preparation, model comparison, calibration, internal evaluation, and explanations; [metadata](models/automotive_v1/metadata.json) describes the packaged inputs and parameters. The IBM sales dataset supports an internal case study, **not** evidence that the model is validated for another supplier or market. Dataset provenance, usage rights, feature timing, and organization-specific validation need confirmation before broader use.
 
-The notebook retains audit tables, calibration bins/plots, genuine held-out
-examples, a validated manual example, permutation importance and the full
-**Dataset Viability Assessment**. Suitable directions are a leakage-aware
-automotive opportunity-scoring study, a historical review dashboard, or a
-feature-availability/calibration evaluation project.
+This repository supports local development and research. Production deployment, security configuration, and external model validation require separate review.

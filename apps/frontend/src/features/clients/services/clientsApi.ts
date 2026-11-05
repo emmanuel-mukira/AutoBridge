@@ -64,7 +64,7 @@ export const clientsApi = {
   list: async () => (await http.get<{ clients: Client[] }>("/api/clients", { params: { limit: 100 } })).data,
   getById: async (id: number) => (await http.get<Client>(`/api/clients/${id}`)).data,
   create: async (input: ClientInput) => (await http.post<Client>("/api/clients", input)).data,
-  update: async (id: number, input: ClientInput) => (await http.patch<Client>(`/api/clients/${id}`, input)).data,
+  update: async (id: number, input: Partial<ClientInput>) => (await http.patch<Client>(`/api/clients/${id}`, input)).data,
   owners: async () => (await http.get<{ owners: ClientOwner[] }>("/api/clients/owners")).data.owners,
   salesHistory: async (id: number, asOf?: string) => (await http.get<ClientSalesHistory>(`/api/clients/${id}/sales-history`, { params: { asOf } })).data,
 };

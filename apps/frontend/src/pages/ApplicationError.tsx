@@ -5,7 +5,7 @@ export default function ApplicationError() {
   return (
     <main className="flex min-h-dvh items-center justify-center bg-slate-950 px-5 py-10 text-slate-50">
       <section className="w-full max-w-2xl text-center" aria-labelledby="application-error-title">
-        <p className="text-sm font-semibold tracking-wide text-blue-300">AutoBridge CRM</p>
+        <p className="text-sm font-semibold tracking-wide text-blue-300">AutoBridge</p>
 
         <img
           src="/autobridge-connection-error.webp"

@@ -47,6 +47,10 @@ function quotationError(error: unknown, res: Response): boolean {
       status: 409,
       message: "Only a sent or rejected quotation can be revised",
     },
+    OPPORTUNITY_CLOSED: {
+      status: 409,
+      message: "Closed opportunities cannot create quotation revisions",
+    },
     DRAFT_ALREADY_EXISTS: {
       status: 409,
       message: "Finish the existing draft revision before creating another",

@@ -36,6 +36,7 @@ export interface AuthUser {
   lastName: string;
   email: string;
   role: "ADMIN" | "SALES_REP";
+  mustChangePassword: boolean;
   groups: string[];
 }
 
@@ -48,6 +49,7 @@ interface AuthState {
     login: (email: string, password: string) => Promise<boolean>;
     logout: () => Promise<void>;
     checkSession: () => Promise<void>;
+    refreshUser: (user: AuthUser) => void;
   };
 }
 
@@ -88,6 +90,7 @@ export const useAuthStore = create<AuthState>()(devtools((set) => ({
         set({ user: null, isAuthenticated: false, isLoading: false });
       }
     },
+    refreshUser: (user) => set({ user, isAuthenticated: true, error: null }),
   },
 }), { name: "Auth Store" }));
 

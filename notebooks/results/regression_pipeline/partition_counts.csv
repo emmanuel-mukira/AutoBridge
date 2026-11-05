@@ -1,0 +1,5 @@
+Partition,Opportunities,Won,Loss
+Training,37586,8564,29022
+Calibration,7517,1706,5811
+Validation,15025,3410,11615
+Test,15030,3423,11607

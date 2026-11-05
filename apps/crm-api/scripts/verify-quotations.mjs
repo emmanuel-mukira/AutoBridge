@@ -115,6 +115,7 @@ try {
   const lost = await request(`/api/opportunities/${opportunity.data.id}/stage`, "PATCH", { stage: "CLOSED", outcome: "LOST" }, owner);
   assert.equal(lost.response.status, 200);
   assert.equal(lost.data.outcome, "LOST");
+  assert.equal((await request(`/api/quotations/${savedV2.id}/revisions`, "POST", undefined, owner)).response.status, 409);
 
   const acceptedOpportunity = await request("/api/opportunities", "POST", { ...input, title: `Accepted quotation ${suffix}` }, owner);
   assert.equal(acceptedOpportunity.response.status, 201);
