@@ -4,9 +4,9 @@ import type { ContactInput, ContactUpdate } from "@/types/contact";
 
 const keys = { client: (clientId: number) => ["contacts", "client", clientId] as const };
 
-export const useContacts = (clientId?: number) => useQuery({
-  queryKey: keys.client(clientId ?? 0),
-  queryFn: () => contactsApi.list(clientId!),
+export const useContacts = (clientId?: number, filters: { page?: number; limit?: number } = {}) => useQuery({
+  queryKey: [...keys.client(clientId ?? 0), filters],
+  queryFn: () => contactsApi.list(clientId!, filters),
   enabled: !!clientId,
 });
 

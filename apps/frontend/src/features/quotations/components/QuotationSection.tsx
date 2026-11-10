@@ -1,3 +1,5 @@
+import { useListPagination } from "@/hooks/useListPagination";
+import { TablePagination } from "@/components/shared/TablePagination";
 import { useState } from "react";
 import { CopyPlus, FileText, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +41,7 @@ export function QuotationSection({
   const opportunityId = opportunity.id;
   const clientId = opportunity.clientId;
   const query = useOpportunityQuotations(opportunityId);
+  const paged = useListPagination(query.data ?? []);
   const transition = useUpdateQuotationStatus(opportunityId);
   const revise = useReviseQuotation(opportunityId);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -75,7 +78,7 @@ export function QuotationSection({
             <p className="font-medium">No quotation history</p>
           </div>
         )}
-        {query.data?.map((quotation) => (
+        {paged.visibleItems.map((quotation) => (
           <article
             key={quotation.id}
             className={`rounded-lg border p-4 ${quotation.current ? "border-primary/60 bg-primary/5" : ""}`}
@@ -188,6 +191,7 @@ export function QuotationSection({
               )}
           </article>
         ))}
+        {!!query.data?.length && <TablePagination {...paged.pagination} />}
         <QuotationDialog
           open={dialogOpen}
           onOpenChange={setDialogOpen}

@@ -28,7 +28,12 @@ export class ClientService {
       ...access(actor),
       ...(filters.ownerId && actor.role === "ADMIN" ? { ownerId: filters.ownerId } : {}),
       ...(filters.countyName ? { countyName: { contains: filters.countyName, mode: "insensitive" } } : {}),
-      ...(filters.search ? { businessName: { contains: filters.search, mode: "insensitive" } } : {}),
+      ...(filters.search ? { OR: [
+        { businessName: { contains: filters.search, mode: "insensitive" } },
+        { countyName: { contains: filters.search, mode: "insensitive" } },
+        { owner: { firstName: { contains: filters.search, mode: "insensitive" } } },
+        { owner: { lastName: { contains: filters.search, mode: "insensitive" } } },
+      ] } : {}),
     };
     const [clients, total] = await prisma.$transaction([
       prisma.client.findMany({ where, skip: (filters.page - 1) * filters.limit, take: filters.limit, orderBy: { createdAt: "desc" }, include: clientInclude }),

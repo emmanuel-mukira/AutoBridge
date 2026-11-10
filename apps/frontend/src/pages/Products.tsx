@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { TablePagination } from "@/components/shared/TablePagination";
 import { PackageSearch, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,6 +23,8 @@ export default function Products() {
   const [groupId, setGroupId] = useState("");
   const [subgroupId, setSubgroupId] = useState("");
   const [active, setActive] = useState<"true" | "false" | "all">("all");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
   const groups = useOpportunityProducts();
   const products = useCatalogueProducts(
     search,
@@ -35,6 +38,10 @@ export default function Products() {
       [],
     [groupId, groups.data],
   );
+  const total = products.data?.length ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const visibleProducts = products.data?.slice((currentPage - 1) * pageSize, currentPage * pageSize) ?? [];
 
   return (
     <section className="space-y-4">
@@ -45,14 +52,14 @@ export default function Products() {
           snapshots.
         </p>
       </div>
-      <div className="grid gap-2 md:grid-cols-[minmax(220px,1fr)_220px_220px_150px]">
+      <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_180px_180px_130px]">
         <div className="relative">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             className="pl-9"
             placeholder="Search product, brand or SKU"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => { setSearch(event.target.value); setPage(1); }}
           />
         </div>
         <Select
@@ -60,6 +67,7 @@ export default function Products() {
           onValueChange={(value) => {
             setGroupId(value === all ? "" : value);
             setSubgroupId("");
+            setPage(1);
           }}
         >
           <SelectTrigger>
@@ -76,7 +84,7 @@ export default function Products() {
         </Select>
         <Select
           value={subgroupId || all}
-          onValueChange={(value) => setSubgroupId(value === all ? "" : value)}
+          onValueChange={(value) => { setSubgroupId(value === all ? "" : value); setPage(1); }}
           disabled={!groupId}
         >
           <SelectTrigger>
@@ -93,7 +101,7 @@ export default function Products() {
         </Select>
         <Select
           value={active}
-          onValueChange={(value) => setActive(value as typeof active)}
+          onValueChange={(value) => { setActive(value as typeof active); setPage(1); }}
         >
           <SelectTrigger>
             <SelectValue />
@@ -123,17 +131,17 @@ export default function Products() {
       )}
       {!!products.data?.length && (
         <div className="overflow-hidden rounded-lg border bg-card">
-          <div className="hidden grid-cols-[minmax(260px,2fr)_minmax(160px,1fr)_120px_150px_90px] gap-4 border-b bg-muted/40 px-4 py-3 text-xs font-semibold uppercase text-muted-foreground md:grid">
+          <div className="hidden grid-cols-[minmax(0,2fr)_minmax(0,1fr)_70px_110px_70px] gap-4 border-b bg-muted/40 px-4 py-3 text-xs font-semibold uppercase text-muted-foreground xl:grid">
             <span>Product</span>
             <span>Category</span>
             <span>Unit</span>
             <span>Price</span>
             <span>Status</span>
           </div>
-          {products.data.map((product) => (
+          {visibleProducts.map((product) => (
             <article
               key={product.id}
-              className="grid gap-3 border-b px-4 py-4 last:border-0 md:grid-cols-[minmax(260px,2fr)_minmax(160px,1fr)_120px_150px_90px] md:items-start"
+              className="grid gap-3 border-b px-4 py-4 last:border-0 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_70px_110px_70px] xl:items-start"
             >
               <div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -171,6 +179,7 @@ export default function Products() {
           ))}
         </div>
       )}
+      {total > 0 && <TablePagination page={currentPage} pageSize={pageSize} totalCount={total} totalPages={totalPages} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />}
     </section>
   );
 }

@@ -3,7 +3,7 @@ import { clientsApi } from "../services/clientsApi";
 
 const keys = { all: ["clients"] as const, detail: (id: number) => ["clients", id] as const };
 
-export const useClients = () => useQuery({ queryKey: keys.all, queryFn: clientsApi.list });
+export const useClients = (filters: Parameters<typeof clientsApi.list>[0] = {}) => useQuery({ queryKey: [...keys.all, filters], queryFn: () => clientsApi.list(filters) });
 export const useClient = (id: number) => useQuery({ queryKey: keys.detail(id), queryFn: () => clientsApi.getById(id), enabled: !!id });
 export const useClientOwners = () => useQuery({ queryKey: ["clients", "owners"], queryFn: clientsApi.owners });
 export const useClientSalesHistory = (id: number) => useQuery({ queryKey: ["clients", id, "sales-history"], queryFn: () => clientsApi.salesHistory(id), enabled: Number.isInteger(id) && id > 0 });

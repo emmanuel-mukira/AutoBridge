@@ -87,7 +87,8 @@ export class AnalyticsOverviewService {
       prisma.followUp.count({ where: { ...followUpBase, completedAt: range ?? { not: null } } }),
       prisma.opportunity.findMany({ where: createdWhere, orderBy: { createdAt: "desc" }, take: 5, include: { client: { select: { id: true, businessName: true } }, owner: { select: { id: true, firstName: true, lastName: true } } } }),
       prisma.opportunity.findMany({
-        where: { AND: [openWhere, { followUps: { none: { completedAt: null, dueAt: { gte: now } } } }] },
+        // Attention means an existing follow-up is due and has not been completed.
+        where: { AND: [openWhere, { followUps: { some: { completedAt: null, dueAt: { lte: now } } } }] },
         orderBy: [{ estimatedCloseAt: "asc" }, { updatedAt: "asc" }],
         take: 5,
         include: { client: { select: { id: true, businessName: true } }, owner: { select: { id: true, firstName: true, lastName: true } } },

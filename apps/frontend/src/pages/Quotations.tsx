@@ -1,3 +1,5 @@
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TablePagination } from "@/components/shared/TablePagination";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Eye, FileText, Search } from "lucide-react";
@@ -30,6 +32,7 @@ export default function Quotations() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
   const owners = useOpportunityOwners();
   const query = useQuotationSeries({
     search: search || undefined,
@@ -38,7 +41,7 @@ export default function Quotations() {
     from: from ? new Date(`${from}T00:00:00`).toISOString() : undefined,
     to: to ? new Date(`${to}T23:59:59`).toISOString() : undefined,
     page,
-    limit: 20,
+    limit: pageSize,
   });
   const quotations = query.data?.series ?? [];
   const pagination = query.data?.pagination;
@@ -139,33 +142,33 @@ export default function Quotations() {
         </div>
       )}
       {quotations.length > 0 && (
-        <div className="overflow-x-auto rounded-lg border bg-card">
-          <table className="w-full min-w-[900px] text-sm">
-            <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
-              <tr>
-                <th className="p-3">Quotation</th>
-                <th className="p-3">Client / opportunity</th>
-                <th className="p-3">Salesperson</th>
-                <th className="p-3">Effective version</th>
-                <th className="p-3 text-right">Final amount</th>
-                <th className="p-3">Status</th>
-                <th className="p-3">Date</th>
-                <th className="p-3">
+        <div className="max-h-[60svh] overflow-auto sm:max-h-none rounded-lg border bg-card">
+          <Table className="w-full min-w-[640px] text-sm">
+            <TableHeader className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
+              <TableRow>
+                <TableHead className="p-2">Quotation</TableHead>
+                <TableHead className="p-2">Client / opportunity</TableHead>
+                <TableHead className="p-2">Salesperson</TableHead>
+                <TableHead className="p-2">Effective version</TableHead>
+                <TableHead className="p-2 text-right">Final amount</TableHead>
+                <TableHead className="p-2">Status</TableHead>
+                <TableHead className="p-2">Date</TableHead>
+                <TableHead className="p-2">
                   <span className="sr-only">Action</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {quotations.map((quotation) => (
-                <tr key={quotation.quoteNumber} className="border-t">
-                  <td className="p-3 font-medium">
+                <TableRow key={quotation.quoteNumber} className="border-t">
+                  <TableCell className="p-2 font-medium">
                     {quotation.quoteNumber}
                     <span className="block text-xs text-muted-foreground">
                       {quotation.versionCount} saved version
                       {quotation.versionCount === 1 ? "" : "s"}
                     </span>
-                  </td>
-                  <td className="p-3">
+                  </TableCell>
+                  <TableCell className="p-2">
                     <span className="font-medium">
                       {quotation.client.businessName}
                     </span>
@@ -175,66 +178,41 @@ export default function Quotations() {
                     >
                       {quotation.opportunity.title}
                     </Link>
-                  </td>
-                  <td className="p-3">
+                  </TableCell>
+                  <TableCell className="p-2">
                     {quotation.opportunity.owner.firstName}{" "}
                     {quotation.opportunity.owner.lastName}
-                  </td>
-                  <td className="p-3">Version {quotation.version}</td>
-                  <td className="p-3 text-right font-semibold">
+                  </TableCell>
+                  <TableCell className="p-2">Version {quotation.version}</TableCell>
+                  <TableCell className="p-2 text-right font-semibold">
                     {money(quotation.totalAmount)}
-                  </td>
-                  <td className="p-3">
+                  </TableCell>
+                  <TableCell className="p-2">
                     <Badge variant="outline">
                       {quotation.status[0] +
                         quotation.status.slice(1).toLowerCase()}
                     </Badge>
-                  </td>
-                  <td className="p-3">
+                  </TableCell>
+                  <TableCell className="p-2">
                     {new Date(
                       quotation.issueDate ?? quotation.createdAt,
                     ).toLocaleDateString()}
-                  </td>
-                  <td className="p-3 text-right">
+                  </TableCell>
+                  <TableCell className="p-2 text-right">
                     <Button asChild size="sm" variant="outline">
                       <Link to={`/dashboard/quotations/${quotation.id}`}>
                         <Eye className="mr-2 h-4 w-4" />
                         View
                       </Link>
                     </Button>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       )}
-      {pagination && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between gap-3 text-sm">
-          <p className="text-muted-foreground">
-            Page {pagination.page} of {pagination.totalPages} ·{" "}
-            {pagination.total} quotations
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page === 1}
-              onClick={() => setPage((value) => value - 1)}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page === pagination.totalPages}
-              onClick={() => setPage((value) => value + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
+      {pagination && <TablePagination page={page} pageSize={pageSize} totalCount={pagination.total} totalPages={Math.max(1, pagination.totalPages)} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />}
     </section>
   );
 }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { TablePagination } from "@/components/shared/TablePagination";
 import {
   Dialog,
   DialogContent,
@@ -52,7 +53,9 @@ export function ClientContactsDialog({
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [deletingContact, setDeletingContact] = useState<Contact | null>(null);
 
-  const { data: contactsData, isLoading, error } = useContacts(client?.id);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
+  const { data: contactsData, isLoading, error } = useContacts(client?.id, { page, limit: pageSize });
   const deleteContactMutation = useDeleteContact(client?.id ?? 0);
 
   const handleDelete = async () => {
@@ -71,6 +74,7 @@ export function ClientContactsDialog({
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
+      setPage(1);
       setIsCreateDialogOpen(false);
       setEditingContact(null);
       setDeletingContact(null);
@@ -187,6 +191,7 @@ export function ClientContactsDialog({
             )}
           </div>
 
+          {contactsData && contactsData.pagination.total > 0 && <TablePagination page={page} pageSize={pageSize} totalCount={contactsData.pagination.total} totalPages={Math.max(1, contactsData.pagination.totalPages)} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />}
           <div className="flex justify-end pt-4 border-t flex-shrink-0">
             {deleteContactMutation.error && <p role="alert" className="mr-auto text-sm text-destructive">{deleteContactMutation.error.message}</p>}
             <Button variant="outline" onClick={() => handleOpenChange(false)}>

@@ -1,3 +1,6 @@
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TablePagination } from "@/components/shared/TablePagination";
+import { useListPagination } from "@/hooks/useListPagination";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { CopyPlus, Pencil } from "lucide-react";
@@ -26,6 +29,8 @@ export default function QuotationDetails() {
   const quotation = query.data;
   const opportunity = useOpportunity(quotation?.opportunityId ?? 0);
   const history = useOpportunityQuotations(quotation?.opportunityId ?? 0);
+  const itemPages = useListPagination(quotation?.items ?? []);
+  const versionPages = useListPagination((history.data ?? []).filter((version) => version.quoteNumber === quotation?.quoteNumber).sort((a, b) => b.version - a.version));
   const revise = useReviseQuotation(quotation?.opportunityId ?? 0);
   const transition = useUpdateQuotationStatus(quotation?.opportunityId ?? 0);
   return (
@@ -147,20 +152,20 @@ export default function QuotationDetails() {
                 </div>
               </dl>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[650px] text-sm">
-                  <thead className="bg-muted/40 text-left">
-                    <tr>
-                      <th className="p-3">Product</th>
-                      <th className="p-3">Unit</th>
-                      <th className="p-3 text-right">Quantity</th>
-                      <th className="p-3 text-right">Unit price</th>
-                      <th className="p-3 text-right">Line total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {quotation.items.map((item) => (
-                      <tr key={item.id} className="border-t">
-                        <td className="p-3">
+                <Table className="w-full min-w-[640px] text-sm">
+                  <TableHeader className="bg-muted/40 text-left">
+                    <TableRow>
+                      <TableHead className="p-2">Product</TableHead>
+                      <TableHead className="p-2">Unit</TableHead>
+                      <TableHead className="p-2 text-right">Quantity</TableHead>
+                      <TableHead className="p-2 text-right">Unit price</TableHead>
+                      <TableHead className="p-2 text-right">Line total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {itemPages.visibleItems.map((item) => (
+                      <TableRow key={item.id} className="border-t">
+                        <TableCell className="p-2">
                           <span className="font-medium">
                             {item.productNameSnapshot}
                           </span>
@@ -170,19 +175,20 @@ export default function QuotationDetails() {
                               ? `· ${item.brandSnapshot}`
                               : ""}
                           </span>
-                        </td>
-                        <td className="p-3">{item.unitSnapshot}</td>
-                        <td className="p-3 text-right">{item.quantity}</td>
-                        <td className="p-3 text-right">
+                        </TableCell>
+                        <TableCell className="p-2">{item.unitSnapshot}</TableCell>
+                        <TableCell className="p-2 text-right">{item.quantity}</TableCell>
+                        <TableCell className="p-2 text-right">
                           {money(item.unitPrice)}
-                        </td>
-                        <td className="p-3 text-right font-medium">
+                        </TableCell>
+                        <TableCell className="p-2 text-right font-medium">
                           {money(item.lineTotal)}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
+                <TablePagination {...itemPages.pagination} />
               </div>
               <div className="ml-auto max-w-sm space-y-2 rounded-md bg-muted/40 p-4 text-sm">
                 <div className="flex justify-between">
@@ -231,11 +237,7 @@ export default function QuotationDetails() {
               <CardTitle>Version history</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {history.data
-                ?.filter(
-                  (version) => version.quoteNumber === quotation.quoteNumber,
-                )
-                ?.sort((a, b) => b.version - a.version)
+              {versionPages.visibleItems
                 .map((version) => (
                   <Link
                     key={version.id}
@@ -259,6 +261,7 @@ export default function QuotationDetails() {
                     <span>{money(version.totalAmount)}</span>
                   </Link>
                 ))}
+              <TablePagination {...versionPages.pagination} />
             </CardContent>
           </Card>
           <QuotationDialog

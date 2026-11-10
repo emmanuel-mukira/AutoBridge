@@ -61,7 +61,7 @@ export interface ClientSalesHistory {
 }
 
 export const clientsApi = {
-  list: async () => (await http.get<{ clients: Client[] }>("/api/clients", { params: { limit: 100 } })).data,
+  list: async (filters: { page?: number; limit?: number; search?: string } = {}) => (await http.get<{ clients: Client[]; pagination: { total: number } }>("/api/clients", { params: { limit: 100, ...filters } })).data,
   getById: async (id: number) => (await http.get<Client>(`/api/clients/${id}`)).data,
   create: async (input: ClientInput) => (await http.post<Client>("/api/clients", input)).data,
   update: async (id: number, input: Partial<ClientInput>) => (await http.patch<Client>(`/api/clients/${id}`, input)).data,

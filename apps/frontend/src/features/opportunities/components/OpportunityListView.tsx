@@ -13,7 +13,7 @@ export function OpportunityListView({ opportunities, displayCurrency, onEdit, on
     <Table>
       <TableHeader><TableRow><TableHead>Opportunity</TableHead><TableHead>Client</TableHead><TableHead>Amount</TableHead><TableHead>Score</TableHead><TableHead>Stage</TableHead><TableHead>Owner</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
       <TableBody>{opportunities.map((opportunity) => <TableRow key={opportunity.id}>
-        <TableCell className="font-medium"><Link className="text-primary hover:underline" to={`/dashboard/opportunities/${opportunity.id}`}>{opportunity.title}</Link></TableCell>
+        <TableCell className="max-w-[240px] font-medium"><Link className="line-clamp-2 break-words text-primary hover:underline" title={opportunity.title} to={`/dashboard/opportunities/${opportunity.id}`}>{opportunity.title}</Link></TableCell>
         <TableCell>{opportunity.client.businessName}</TableCell>
         <TableCell>{formatMoney(Number(opportunity.estimatedAmount), opportunity.currency, displayCurrency)}</TableCell>
         <TableCell><OpportunityScoreBadge prediction={opportunity.latestPrediction ?? null} /></TableCell>

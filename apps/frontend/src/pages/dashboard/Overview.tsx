@@ -1,3 +1,5 @@
+import { useListPagination } from "@/hooks/useListPagination";
+import { TablePagination } from "@/components/shared/TablePagination";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Activity, AlertCircle, BriefcaseBusiness, CalendarCheck, CalendarClock, CircleDollarSign, Clock3, Trophy } from "lucide-react";
@@ -52,9 +54,7 @@ function WinRateBreakdown({
               <Bar dataKey="lost" stackId="outcomes" fill="var(--color-lost)" radius={[0, 4, 4, 0]}><LabelList dataKey="rateLabel" position="right" className="fill-foreground text-[10px]" /></Bar>
             </BarChart>
           </ChartContainer>
-          <p className="mt-2 text-xs text-muted-foreground">Bars show Won and Lost counts. Labels show win rate and completed opportunities (Won + Lost).</p>
         </>}
-        {rows.filter((row) => row.resolved === 0).map((row) => <p key={row.key} className="mt-2 text-xs text-muted-foreground">{row.label}: No completed sales outcomes</p>)}
       </CardContent>
     </Card>
   );
@@ -96,6 +96,7 @@ export default function Overview() {
   const owners = useOpportunityOwners();
   const products = useOpportunityProducts();
   const data = analytics.data;
+  const ownerPages = useListPagination(data?.distributions.byOwner ?? []);
 
   if (analytics.isLoading) return <div className="space-y-5"><Skeleton className="h-20 w-full" /><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-20" />)}</div><Skeleton className="h-96" /></div>;
   if (analytics.isError || !data) return <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Dashboard unavailable</AlertTitle><AlertDescription>{analytics.error instanceof Error ? analytics.error.message : "Unable to load operational analytics."}</AlertDescription></Alert>;
@@ -129,7 +130,7 @@ export default function Overview() {
       <div className={`grid gap-4 ${data.scope.isAdmin ? "xl:grid-cols-2" : ""}`}>
         {data.scope.isAdmin && <Card className="overflow-hidden">
           <CardHeader><CardTitle className="text-base">Sales representative performance</CardTitle><CardDescription>Resolved outcomes and confirmed Won value in the selected period</CardDescription></CardHeader>
-          <CardContent className="p-0">{data.distributions.byOwner.length === 0 ? <p className="px-6 pb-6 text-sm text-muted-foreground">No representative outcomes in this period.</p> : <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Representative</TableHead><TableHead>Won</TableHead><TableHead>Lost</TableHead><TableHead>Win rate</TableHead><TableHead>Confirmed Won value</TableHead></TableRow></TableHeader><TableBody>{data.distributions.byOwner.map((owner) => <TableRow key={owner.id}><TableCell className="font-medium">{owner.label}</TableCell><TableCell>{owner.won}</TableCell><TableCell>{owner.lost}</TableCell><TableCell>{owner.winRate === null ? "—" : `${owner.winRate}%`} <span className="text-xs text-muted-foreground">({owner.resolved})</span></TableCell><TableCell>{formatMoney(Number(owner.confirmedWonValueUsd), "USD", displayCurrency, Number(data.currencyBasis.kesPerUsd))}</TableCell></TableRow>)}</TableBody></Table></div>}</CardContent>
+          <CardContent className="p-0">{data.distributions.byOwner.length === 0 ? <p className="px-6 pb-6 text-sm text-muted-foreground">No representative outcomes in this period.</p> : <div className="overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Representative</TableHead><TableHead>Won</TableHead><TableHead>Lost</TableHead><TableHead>Win rate</TableHead><TableHead>Confirmed Won value</TableHead></TableRow></TableHeader><TableBody>{ownerPages.visibleItems.map((owner) => <TableRow key={owner.id}><TableCell className="font-medium">{owner.label}</TableCell><TableCell>{owner.won}</TableCell><TableCell>{owner.lost}</TableCell><TableCell>{owner.winRate === null ? "—" : `${owner.winRate}%`} <span className="text-xs text-muted-foreground">({owner.resolved})</span></TableCell><TableCell>{formatMoney(Number(owner.confirmedWonValueUsd), "USD", displayCurrency, Number(data.currencyBasis.kesPerUsd))}</TableCell></TableRow>)}</TableBody></Table><TablePagination {...ownerPages.pagination} /></div>}</CardContent>
         </Card>}
         <WinRateBreakdown title="Route-to-market performance" description="Resolved win rate by recorded sales channel" rows={data.distributions.byRoute.map((item) => ({ ...item, label: item.key === "UNSPECIFIED" ? "Unspecified" : salesRouteLabels[item.key as keyof typeof salesRouteLabels] }))} />
       </div>
@@ -143,7 +144,7 @@ export default function Overview() {
 
       <div className="grid gap-4 xl:grid-cols-2">
         <OpportunityTable title="Recently created opportunities" description="Newest records in the current reporting scope" opportunities={data.recentOpportunities} />
-        <OpportunityTable title="Follow-up attention" description="Open opportunities without an incomplete future follow-up" opportunities={data.attentionOpportunities} />
+        <OpportunityTable title="Follow-up attention" description="Open opportunities with due or overdue follow-ups still outstanding" opportunities={data.attentionOpportunities} />
       </div>
 
       <Card>

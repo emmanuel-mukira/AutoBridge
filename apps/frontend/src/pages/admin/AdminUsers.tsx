@@ -1,3 +1,5 @@
+import { useListPagination } from "@/hooks/useListPagination";
+import { TablePagination } from "@/components/shared/TablePagination";
 import { useMemo, useState, type FormEvent } from "react";
 import { Search, ShieldCheck, UserPlus } from "lucide-react";
 import { useAuth } from "@/app/auth/useAuth";
@@ -35,6 +37,7 @@ export default function AdminUsers() {
   const assign = useUserAction(({ clientId, ownerId }: { clientId: number; ownerId: number }) => clientsApi.update(clientId, { ownerId }), "Client reassigned");
 
   const rows = useMemo(() => (users.data ?? []).filter((item) => `${item.firstName} ${item.lastName} ${item.email}`.toLowerCase().includes(search.toLowerCase())), [users.data, search]);
+  const pagedUsers = useListPagination(rows);
   const targets = (users.data ?? []).filter((item) => item.role === "SALES_REP" && item.status === "ACTIVE");
 
   function openCreate() { setForm(empty); setPassword(""); setCreating(true); }
@@ -60,18 +63,19 @@ export default function AdminUsers() {
         <Table>
           <TableHeader><TableRow><TableHead>User</TableHead><TableHead>Role</TableHead><TableHead>Status</TableHead><TableHead>Assigned clients</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader>
           <TableBody>
-            {users.isLoading ? <TableRow><TableCell colSpan={5} className="h-24 text-center">Loading users…</TableCell></TableRow> : rows.length === 0 ? <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">No users found.</TableCell></TableRow> : rows.map((item) => (
+            {users.isLoading ? <TableRow><TableCell colSpan={5} className="h-24 text-center">Loading users…</TableCell></TableRow> : rows.length === 0 ? <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">No users found.</TableCell></TableRow> : pagedUsers.visibleItems.map((item) => (
               <TableRow key={item.id}>
                 <TableCell><p className="font-medium">{item.firstName} {item.lastName}</p><p className="text-xs text-muted-foreground">{item.email}</p>{item.mustChangePassword && <p className="mt-1 text-xs text-amber-700">Password change required</p>}</TableCell>
                 <TableCell><Badge variant="outline">{item.role === "ADMIN" ? "Administrator" : "Sales Representative"}</Badge></TableCell>
                 <TableCell><Badge className={statusStyle[item.status]}>{item.status}</Badge></TableCell>
-                <TableCell><div className="space-y-1">{item.ownedClients.length ? item.ownedClients.map((client) => <button key={client.id} className="block text-left text-sm text-primary hover:underline" onClick={() => { setAssigning({ clientId: client.id, clientName: client.businessName, ownerId: item.id }); setTargetOwner(""); }}>{client.businessName}</button>) : <span className="text-sm text-muted-foreground">None</span>}</div></TableCell>
+                <TableCell><div className="max-h-32 space-y-1 overflow-y-auto overscroll-contain">{item.ownedClients.length ? item.ownedClients.map((client) => <button key={client.id} className="block text-left text-sm text-primary hover:underline" onClick={() => { setAssigning({ clientId: client.id, clientName: client.businessName, ownerId: item.id }); setTargetOwner(""); }}>{client.businessName}</button>) : <span className="text-sm text-muted-foreground">None</span>}</div></TableCell>
                 <TableCell><div className="flex flex-wrap justify-end gap-2"><Button size="sm" variant="outline" onClick={() => openEdit(item)}>Edit</Button>{item.status === "PENDING" && <Button size="sm" onClick={() => changeStatus(item, "APPROVED")}>Approve</Button>}{item.status === "DISABLED" && <Button size="sm" onClick={() => changeStatus(item, "ACTIVE")}>Reactivate</Button>}{item.status === "ACTIVE" && item.id !== current?.id && <Button size="sm" variant="outline" onClick={() => changeStatus(item, "DISABLED")}>Disable</Button>}<Button size="sm" variant="ghost" onClick={() => { setPassword(""); setResetting(item); }}>Reset password</Button></div></TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
+      {rows.length > 0 && <TablePagination {...pagedUsers.pagination} />}
 
       <Dialog open={creating || Boolean(editing)} onOpenChange={(open) => { if (!open) { setCreating(false); setEditing(null); } }}><DialogContent><form onSubmit={submitAccount} className="space-y-4"><DialogHeader><DialogTitle>{editing ? "Edit user" : "Create user"}</DialogTitle></DialogHeader><div className="grid gap-4 sm:grid-cols-2"><div><Label htmlFor="firstName">First name</Label><Input id="firstName" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required /></div><div><Label htmlFor="lastName">Last name</Label><Input id="lastName" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} required /></div></div><div><Label htmlFor="userEmail">Email</Label><Input id="userEmail" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required /></div><div><Label>Role</Label><Select value={form.role} onValueChange={(role) => setForm({ ...form, role: role as UserInput["role"] })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="SALES_REP">Sales Representative</SelectItem><SelectItem value="ADMIN">Administrator</SelectItem></SelectContent></Select></div>{!editing && <div><Label htmlFor="initialPassword">Temporary password</Label><PasswordInput id="initialPassword" value={password} onChange={(e) => setPassword(e.target.value)} minLength={6} required /><p className="mt-1 text-xs text-muted-foreground">At least 6 characters. The user must change it after signing in.</p></div>}<DialogFooter><Button type="submit" disabled={create.isPending || update.isPending}>{editing ? "Save changes" : "Create account"}</Button></DialogFooter></form></DialogContent></Dialog>
 

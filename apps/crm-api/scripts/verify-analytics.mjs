@@ -102,6 +102,9 @@ try {
   assert.equal(repOverview.data.activities.upcomingFollowUps, 1);
   assert.equal(repOverview.data.activities.overdueFollowUps, 1);
   assert.equal(repOverview.data.activities.completedFollowUps, 1);
+  // An overdue incomplete follow-up needs attention even when a future one also exists.
+  assert.ok(repOverview.data.attentionOpportunities.some((item) => item.id === usdOpen.id));
+  assert.ok(repOverview.data.attentionOpportunities.every((item) => item.id !== kesOpen.id));
   assert.equal(repOverview.data.currencyBasis.kesPerUsd, "129");
   assert.equal((await request(`/api/analytics/overview?ownerId=${otherRep.user.id}`, "GET", undefined, rep)).response.status, 403);
 

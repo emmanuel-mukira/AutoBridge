@@ -2,9 +2,14 @@ import type { NextFunction, Request, Response } from "express";
 import { AnalyticsOverviewQuerySchema, DecisionSupportQuerySchema } from "../schemas/analytics.schemas.js";
 import { AnalyticsOverviewService } from "../services/analyticsOverviewService.js";
 import { DecisionSupportService } from "../services/decisionSupportService.js";
+import { getModelPerformance } from "../services/modelPerformanceService.js";
 
 const service = new AnalyticsOverviewService();
 const decisionSupportService = new DecisionSupportService();
+
+export async function modelPerformance(_req: Request, res: Response, next: NextFunction) {
+  try { res.json(await getModelPerformance()); } catch (error) { next(error); }
+}
 
 export async function overview(req: Request, res: Response, next: NextFunction) {
   const parsed = AnalyticsOverviewQuerySchema.safeParse(req.query);
