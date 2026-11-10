@@ -19,6 +19,7 @@ import { AutoBridgeLogo } from "@/components/AutoBridgeLogo";
 
 function NavbarComponent() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [menuOpen, setMenuOpen] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -41,6 +42,8 @@ function NavbarComponent() {
   const dashboardPageTitle = dashboardSection
     ? `${dashboardTitles[dashboardSection] ?? "Dashboard"}${dashboardDetail ? " / Details" : ""}`
     : "Analytics Dashboard";
+
+  useEffect(() => { setMenuOpen(false); }, [location.pathname]);
 
   useEffect(() => {
     const stored = localStorage.getItem("theme");
@@ -73,14 +76,14 @@ function NavbarComponent() {
       >
         {/* Mobile Menu */}
         <div className="sm:hidden">
-          <Sheet>
+          <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="sm:hidden">
                 <Menu className="h-5 w-5" />
                 <span className="sr-only">Toggle menu</span>
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-[240px] sm:w-[300px] p-0">
+            <SheetContent side="left" className="w-[min(320px,85vw)] overflow-y-auto bg-background p-0 text-foreground">
               <SheetHeader className="p-4 border-b text-left">
                 <SheetTitle><AutoBridgeLogo /></SheetTitle>
               </SheetHeader>
@@ -92,19 +95,14 @@ function NavbarComponent() {
                   >
                     Home
                   </Link>
-                  {onDashboard ? (
-                    <Link to="/dashboard" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium hover:bg-muted">Dashboard</Link>
-                  ) : (
+                  {!onDashboard && (
                     <a href="/#features" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium hover:bg-muted">Features</a>
                   )}
                 </nav>
                 {onDashboard && (
                   <>
                     <div className="my-4 border-t" />
-                    <div className="px-4 py-2 text-xs font-semibold text-muted-foreground uppercase">
-                      Dashboard
-                    </div>
-                    <SidebarLinks />
+                    <SidebarLinks mobile />
                   </>
                 )}
               </div>
@@ -128,9 +126,6 @@ function NavbarComponent() {
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold sm:text-base">
               {dashboardPageTitle}
-            </p>
-            <p className="hidden text-xs text-muted-foreground sm:block">
-              AutoBridge
             </p>
           </div>
         )}

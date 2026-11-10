@@ -21,3 +21,11 @@ logs/
 
 /datasets/
 .github
+
+# Keep only the authoritative model-development notebook in Git.
+/notebooks/**/*.ipynb
+!/notebooks/08_automotive_domain_analysis.ipynb
+
+# Local documentation and CRM demonstration data.
+/docs/
+/apps/crm-api/data/

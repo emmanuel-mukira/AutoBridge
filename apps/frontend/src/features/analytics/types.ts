@@ -153,3 +153,31 @@ export interface DecisionSupportOverview {
   pagination: { page: number; limit: number; total: number; totalPages: number };
   currencyBasis: { reportingCurrency: "USD"; kesPerUsd: string; source: string; observedAt: string };
 }
+export interface ReliabilitySummary {
+  count: number;
+  won: number;
+  lost: number;
+  meanPrediction: number | null;
+  observedWinRate: number | null;
+}
+
+export interface ModelPerformance {
+  modelVersion: string;
+  modelName: string;
+  evaluation: {
+    source: string;
+    limitation: string;
+    metrics: { key: string; label: string; value: number; explanation: string }[];
+  };
+  reliability: ModelReliability;
+  demonstrationReliability: ModelReliability;
+}
+
+export interface ModelReliability {
+  eligible: number;
+  bins: (ReliabilitySummary & { label: string })[];
+  atLeast70: ReliabilitySummary;
+  source: string;
+  explanation: string;
+  warning: string;
+}

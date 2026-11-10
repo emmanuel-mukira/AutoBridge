@@ -90,6 +90,7 @@ export interface OpportunityFilters {
   productSubgroupId?: number;
   routeToMarket?: SalesRoute;
   limit?: number;
+  page?: number;
 }
 
 export interface ConfirmedSaleInput {

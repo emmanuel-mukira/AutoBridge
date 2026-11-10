@@ -1,3 +1,5 @@
+import { useListPagination } from "@/hooks/useListPagination";
+import { TablePagination } from "@/components/shared/TablePagination";
 import { useState, type FormEvent } from "react";
 import { CircleCheck, TrendingDown, TrendingUp } from "lucide-react";
 import { useAuth } from "@/app/auth/useAuth";
@@ -87,6 +89,8 @@ export function PredictionReviewSection({
   const ownReview = prediction.reviews.find(
     (review) => review.reviewerId === user?.id,
   );
+
+  const otherReviews = useListPagination(prediction.reviews.filter((review) => review.id !== ownReview?.id));
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -180,11 +184,10 @@ export function PredictionReviewSection({
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {ownReview ? "Other reviews" : "Saved reviews"}
           </p>
-          {prediction.reviews
-            .filter((review) => review.id !== ownReview?.id)
-            .map((review) => (
+          {otherReviews.visibleItems.map((review) => (
               <SavedReview key={review.id} review={review} />
             ))}
+          <TablePagination {...otherReviews.pagination} />
         </div>
       )}
       {readOnly && prediction.reviews.length === 0 && (

@@ -2,7 +2,7 @@ import { memo } from "react";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-interface TablePaginationProps {
+export interface TablePaginationProps {
   page: number;
   pageSize: number;
   totalPages: number;
@@ -23,18 +23,19 @@ export const TablePagination = memo(function TablePagination({
   const end = Math.min(page * pageSize, totalCount);
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-3 border-t bg-muted/30 gap-3">
+    <div className="flex flex-wrap items-center justify-between px-3 py-2 border-t bg-muted/30 gap-2">
       <div className="text-xs sm:text-sm text-muted-foreground order-2 sm:order-1">
         Showing <span className="font-medium">{start}-{end}</span> of{" "}
         <span className="font-medium">{totalCount}</span>
       </div>
       
-      <div className="flex flex-col sm:flex-row items-center gap-3 order-1 sm:order-2 w-full sm:w-auto">
+      <div className="flex flex-wrap items-center justify-between gap-2 order-1 sm:order-2 w-full sm:w-auto">
         <div className="flex items-center gap-2">
-          <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
+          <span className="hidden text-xs sm:block sm:text-sm text-muted-foreground whitespace-nowrap">
             Rows per page
           </span>
           <select
+            aria-label="Rows per page"
             className="h-8 sm:h-9 rounded-md border bg-background px-2 sm:px-3 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             value={pageSize}
             onChange={(e) => {
@@ -56,6 +57,7 @@ export const TablePagination = memo(function TablePagination({
             disabled={page <= 1}
             onClick={() => onPageChange(Math.max(1, page - 1))}
             className="h-8 w-8 sm:w-auto sm:px-3"
+            aria-label="Previous page"
           >
             <ChevronLeft className="h-4 w-4" />
             <span className="hidden sm:inline ml-1">Previous</span>
@@ -75,6 +77,7 @@ export const TablePagination = memo(function TablePagination({
             disabled={page >= totalPages}
             onClick={() => onPageChange(Math.min(totalPages, page + 1))}
             className="h-8 w-8 sm:w-auto sm:px-3"
+            aria-label="Next page"
           >
             <span className="hidden sm:inline mr-1">Next</span>
             <ChevronRight className="h-4 w-4" />

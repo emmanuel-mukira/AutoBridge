@@ -4,6 +4,13 @@ import { useDateRange } from "../store/analyticsStore";
 import { ANALYTICS_QUERY_KEY } from "../queryKeys";
 import type { AnalyticsFilters, DecisionSupportFilters } from "../types";
 
+export function useModelPerformance() {
+  return useQuery({
+    queryKey: [...ANALYTICS_QUERY_KEY, "model-performance"],
+    queryFn: () => analyticsApi.modelPerformance(),
+  });
+}
+
 export function useAnalytics(filters: AnalyticsFilters = {}) {
   const dateRange = useDateRange();
   return useQuery({

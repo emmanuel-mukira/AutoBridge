@@ -7,6 +7,7 @@ AutoBridge is an automotive sales opportunity management and decision-support ap
 - **Sales workflow:** clients and contacts, assigned opportunity ownership, pipeline stages and outcomes, product catalogue, versioned quotations, interactions, and follow-ups.
 - **Reporting:** an analytics dashboard for pipeline and completed sales, plus a decision-support dashboard that presents prediction coverage and indicative commercial prioritization.
 - **Prediction review:** saved win probabilities, the inputs and explanations used for each prediction, prediction history, and separate human reviews.
+- **Model performance:** administrators can open the Model performance tab in Decision Support. `GET /api/analytics/model-performance` serves the frozen primary-model ROC-AUC, Average Precision and Brier Score, alongside an all-time reliability chart of live resolved opportunities. The chart uses the latest pre-outcome primary prediction per opportunity; it excludes open opportunities and fallback predictions. Live observations (including demonstration data) are not independent validation.
 - **Access control:** Sales Representatives work with records available to their role; administrators manage user accounts and assignments. The API enforces authorization rather than relying on the interface alone.
 
 Commercial priority, model probability, human review, and the final sales outcome are distinct. The primary model uses verified prior-client revenue; when that history is genuinely unavailable, the separately evaluated limited-history fallback can be used.
@@ -22,6 +23,10 @@ Commercial priority, model probability, human review, and the final sales outcom
 | [`notebooks/08_automotive_domain_analysis.ipynb`](notebooks/08_automotive_domain_analysis.ipynb) | Authoritative model-development and evaluation notebook |
 
 PostgreSQL runs locally through [Docker Compose](docker-compose.yml). The frontend calls the Express API, which owns application rules and saved records; Express calls the internal ML service for scoring.
+
+The model-performance endpoint reads `models/automotive_v1/metadata.json` from the repository layout; retain this read-only file when deploying the API, including compiled `dist/src` execution. Run `npm run verify:model-performance` from `apps/crm-api` for a database-free check of route permissions, metric provenance and reliability calculations.
+
+Model Performance opens with a seeded **IBM demonstration** reliability view: 1,000 opportunities sampled from the original validation partition (seed 42), scored by the frozen primary artifact, with the dataset's original Won/Loss labels. `apps/crm-api/data/ibm-reliability-demo.json` stores the five inputs, source opportunity IDs, actual model outputs and source/model hashes. Include this file when deploying the API. Rebuild it from the repository root using your existing ML environment: `python apps/crm-api/scripts/seed-reliability-demo.py`. The script requires the existing pandas, scikit-learn, joblib and nbformat dependencies. It does not train models or write CRM records. Switch to **Application outcomes** for live CRM monitoring; dataset replay is demonstration evidence and does not represent new sales or independent validation.
 
 ## Run locally
 

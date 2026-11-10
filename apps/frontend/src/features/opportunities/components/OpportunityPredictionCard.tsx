@@ -1,3 +1,5 @@
+import { useListPagination } from "@/hooks/useListPagination";
+import { TablePagination } from "@/components/shared/TablePagination";
 import { ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,6 +34,7 @@ export function OpportunityPredictionCard({
   const resolved = Boolean(opportunity.outcome);
   const probability = latest ? Number(latest.wonProbability) * 100 : null;
   const olderPredictions = predictions.data?.history.slice(1) ?? [];
+  const pagedHistory = useListPagination(olderPredictions);
   const current = Boolean(latest && !latest.stale);
 
   return (
@@ -170,7 +173,7 @@ export function OpportunityPredictionCard({
           </CardHeader>
           <CardContent>
             <div className="divide-y rounded-md border">
-              {olderPredictions.map((item) => (
+              {pagedHistory.visibleItems.map((item) => (
                 <details key={item.id} className="group/history">
                   <summary className="grid cursor-pointer list-none grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-3 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-4">
                     <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open/history:rotate-180" />
@@ -214,6 +217,7 @@ export function OpportunityPredictionCard({
                 </details>
               ))}
             </div>
+            <TablePagination {...pagedHistory.pagination} />
           </CardContent>
         </Card>
       )}

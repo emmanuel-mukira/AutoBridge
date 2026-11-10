@@ -52,6 +52,8 @@ export interface FollowUpInput {
 }
 
 export interface ActivityFilters {
+  page?: number;
+  limit?: number;
   clientId?: number;
   opportunityId?: number;
   userId?: number;
