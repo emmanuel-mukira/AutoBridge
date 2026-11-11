@@ -4,6 +4,9 @@ __pycache__/
 *.py[cod]
 .vscode/
 CONTEXT.md
+/FUTURE_MODEL_PERFORMANCE.md
+/next prompt.md
+/quickstart-commands.md
 
 # Local Node artifacts and credentials
 node_modules/

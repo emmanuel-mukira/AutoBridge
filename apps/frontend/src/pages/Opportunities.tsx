@@ -24,6 +24,7 @@ export default function Opportunities() {
   const [route, setRoute] = useState<"" | SalesRoute>("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
+  const [view, setView] = useState("board");
   const displayCurrency = useUIStore((state) => state.displayCurrency);
   const { data, isLoading, error } = useOpportunities({ search: search || undefined, stage: stage || undefined, routeToMarket: route || undefined, page, limit: pageSize });
   const transition = useTransitionOpportunity();
@@ -60,7 +61,7 @@ export default function Opportunities() {
     {isLoading && <p className="text-muted-foreground">Loading opportunities...</p>}
     {error && <p role="alert" className="text-destructive">Unable to load opportunities. Please try again.</p>}
     {!isLoading && !error && opportunities.length === 0 && <div className="rounded-lg border border-dashed bg-card py-12 text-center"><BriefcaseBusiness className="mx-auto mb-3 h-8 w-8 text-muted-foreground" /><p className="font-medium">No opportunities match these filters</p></div>}
-    {!!opportunities.length && <Tabs defaultValue="board">
+    {!!opportunities.length && <Tabs value={view} onValueChange={setView}>
       <div className="flex flex-wrap items-center justify-between gap-2"><TabsList><TabsTrigger value="board"><LayoutGrid className="mr-2 h-4 w-4" />Board</TabsTrigger><TabsTrigger value="list"><List className="mr-2 h-4 w-4" />List</TabsTrigger></TabsList><p className="text-xs text-muted-foreground">Drag cards forward to update their stage.</p></div>
       <TabsContent value="board"><OpportunityKanbanBoard opportunities={opportunities} displayCurrency={displayCurrency} onEdit={editOpportunity} onStageDrop={handleStageDrop} movingId={transition.isPending ? transition.variables?.id : undefined} /></TabsContent>
       <TabsContent value="list"><OpportunityListView opportunities={opportunities} displayCurrency={displayCurrency} onEdit={editOpportunity} onChangeStage={(opportunity) => requestStageChange(opportunity)} /></TabsContent>
