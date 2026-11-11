@@ -84,17 +84,16 @@ function NavbarComponent() {
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="w-[min(320px,85vw)] overflow-y-auto bg-background p-0 text-foreground">
-              <SheetHeader className="p-4 border-b text-left">
+              <SheetHeader className="sticky top-0 z-10 border-b bg-background p-4 text-left">
                 <SheetTitle><AutoBridgeLogo /></SheetTitle>
               </SheetHeader>
               <div className="py-4">
                 <nav className="flex flex-col gap-1 px-2">
-                  <Link 
-                    to="/" 
-                    className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium hover:bg-muted"
-                  >
-                    Home
-                  </Link>
+                  {onDashboard && (
+                    <Link to="/" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium hover:bg-muted">
+                      Home
+                    </Link>
+                  )}
                   {!onDashboard && (
                     <a href="/#features" className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium hover:bg-muted">Features</a>
                   )}
@@ -102,7 +101,7 @@ function NavbarComponent() {
                 {onDashboard && (
                   <>
                     <div className="my-4 border-t" />
-                    <SidebarLinks mobile />
+                    <SidebarLinks mobile onNavigate={() => setMenuOpen(false)} />
                   </>
                 )}
               </div>
@@ -117,7 +116,6 @@ function NavbarComponent() {
 
         {!onDashboard && (
           <nav className="ml-8 hidden items-center gap-6 text-sm font-medium text-muted-foreground sm:flex" aria-label="Primary navigation">
-            <Link to="/" className="transition-colors hover:text-foreground">Home</Link>
             <a href="/#features" className="transition-colors hover:text-foreground">Features</a>
           </nav>
         )}
@@ -144,6 +142,19 @@ function NavbarComponent() {
 
         {/* Right Actions */}
         <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleTheme}
+            className="text-muted-foreground"
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {theme === "dark" ? (
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            )}
+          </Button>
           {onDashboard ? (
             <>
           <Button
@@ -155,21 +166,6 @@ function NavbarComponent() {
           >
             {displayCurrency}
           </Button>
-          {/* Theme Toggle */}
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={toggleTheme}
-            className="text-muted-foreground"
-          >
-            {theme === 'dark' ? (
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-            )}
-            <span className="sr-only">Toggle theme</span>
-          </Button>
-
           {/* User Profile */}
           {user ? (
             <DropdownMenu>
