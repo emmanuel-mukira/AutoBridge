@@ -7,6 +7,7 @@ CONTEXT.md
 /FUTURE_MODEL_PERFORMANCE.md
 /next prompt.md
 /quickstart-commands.md
+/DEPLOYMENT_PLAN.md
 
 # Local Node artifacts and credentials
 node_modules/
@@ -32,3 +33,4 @@ logs/
 # Local documentation and CRM demonstration data.
 /docs/
 /apps/crm-api/data/
+/graphify-out/

@@ -11,6 +11,7 @@ function referenceError(error: unknown, res: Response): boolean {
     OWNER_NOT_FOUND: "Owner not found",
     CLIENT_OWNER_MISMATCH: "Follow-up owner must own the selected client",
     OPPORTUNITY_MISMATCH: "Opportunity not found or does not belong to the selected client",
+    INVALID_APPOINTMENT_CONFIRMATION: "Only meetings and site visits can be confirmed appointments",
   };
   if (!messages[error.message]) return false;
   res.status(400).json({ error: messages[error.message] });

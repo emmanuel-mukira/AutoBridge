@@ -8,6 +8,8 @@ export const CreateFollowUpSchema = z.object({
   title: z.string().trim().min(1).max(200),
   channel: InteractionTypeSchema,
   dueAt: z.string().datetime(),
+  estimatedMinutes: z.number().int().min(15).max(4800).refine((value) => value % 15 === 0).nullable().optional(),
+  appointmentConfirmed: z.boolean().default(false),
 });
 
 export const UpdateFollowUpSchema = z.object({
@@ -15,6 +17,8 @@ export const UpdateFollowUpSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
   channel: InteractionTypeSchema.optional(),
   dueAt: z.string().datetime().optional(),
+  estimatedMinutes: z.number().int().min(15).max(4800).refine((value) => value % 15 === 0).nullable().optional(),
+  appointmentConfirmed: z.boolean().optional(),
 }).refine((value) => Object.keys(value).length > 0, "Provide at least one field");
 
 export const ListFollowUpsSchema = z.object({

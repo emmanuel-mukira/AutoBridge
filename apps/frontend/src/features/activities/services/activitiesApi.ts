@@ -29,6 +29,8 @@ export interface FollowUp {
   channel: InteractionType | null;
   dueAt: string;
   completedAt: string | null;
+  estimatedMinutes: number | null;
+  appointmentConfirmed: boolean;
   createdAt: string;
   client: ActivityClient;
   opportunity: ActivityOpportunity;
@@ -49,6 +51,8 @@ export interface FollowUpInput {
   title: string;
   channel: InteractionType;
   dueAt: string;
+  estimatedMinutes?: number | null;
+  appointmentConfirmed?: boolean;
 }
 
 export interface ActivityFilters {
@@ -68,7 +72,8 @@ export const activitiesApi = {
   updateInteraction: async (id: number, input: Partial<Pick<InteractionInput, "opportunityId" | "interactionType" | "notes" | "occurredAt">>) => (await http.patch<Interaction>(`/api/interactions/${id}`, input)).data,
   deleteInteraction: async (id: number) => { await http.delete(`/api/interactions/${id}`); },
   listFollowUps: async (filters: ActivityFilters = {}) => (await http.get<{ followUps: FollowUp[]; pagination: { total: number } }>("/api/follow-ups", { params: filters })).data,
+  getFollowUp: async (id: number) => (await http.get<FollowUp>(`/api/follow-ups/${id}`)).data,
   createFollowUp: async (input: FollowUpInput) => (await http.post<FollowUp>("/api/follow-ups", input)).data,
-  updateFollowUp: async (id: number, input: Partial<Pick<FollowUpInput, "opportunityId" | "title" | "channel" | "dueAt">>) => (await http.patch<FollowUp>(`/api/follow-ups/${id}`, input)).data,
+  updateFollowUp: async (id: number, input: Partial<Pick<FollowUpInput, "opportunityId" | "title" | "channel" | "dueAt" | "estimatedMinutes" | "appointmentConfirmed">>) => (await http.patch<FollowUp>(`/api/follow-ups/${id}`, input)).data,
   completeFollowUp: async (id: number) => (await http.patch<FollowUp>(`/api/follow-ups/${id}/complete`, {})).data,
 };

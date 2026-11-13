@@ -34,8 +34,9 @@ export class FollowUpService {
 
   async create(actor: ClientActor, input: CreateFollowUpInput) {
     const ownerId = await this.validateReferences(actor, input);
+    if (input.appointmentConfirmed && !["MEETING", "SITE_VISIT"].includes(input.channel)) throw new Error("INVALID_APPOINTMENT_CONFIRMATION");
     return prisma.followUp.create({
-      data: { clientId: input.clientId, opportunityId: input.opportunityId, ownerId, title: input.title.trim(), channel: input.channel, dueAt: new Date(input.dueAt) },
+      data: { clientId: input.clientId, opportunityId: input.opportunityId, ownerId, title: input.title.trim(), channel: input.channel, dueAt: new Date(input.dueAt), estimatedMinutes: input.estimatedMinutes ?? null, appointmentConfirmed: input.appointmentConfirmed },
       include,
     });
   }
@@ -66,9 +67,12 @@ export class FollowUpService {
   }
 
   async update(actor: ClientActor, id: number, input: UpdateFollowUpInput) {
+    const current = await this.getById(actor, id);
+    if (!current) return null;
+    const channel = input.channel ?? current.channel;
+    const confirmed = input.appointmentConfirmed ?? (input.channel && input.channel !== current.channel ? false : current.appointmentConfirmed);
+    if (confirmed && !["MEETING", "SITE_VISIT"].includes(channel ?? "")) throw new Error("INVALID_APPOINTMENT_CONFIRMATION");
     if (input.opportunityId !== undefined) {
-      const current = await this.getById(actor, id);
-      if (!current) return null;
       const opportunity = await prisma.opportunity.findFirst({
         where: { id: input.opportunityId, clientId: current.clientId, ownerId: current.ownerId },
         select: { id: true },
@@ -82,6 +86,8 @@ export class FollowUpService {
         ...(input.title !== undefined ? { title: input.title.trim() } : {}),
         ...(input.channel !== undefined ? { channel: input.channel } : {}),
         ...(input.dueAt !== undefined ? { dueAt: new Date(input.dueAt) } : {}),
+        ...(input.estimatedMinutes !== undefined ? { estimatedMinutes: input.estimatedMinutes } : {}),
+        appointmentConfirmed: confirmed,
       },
     });
     return updated.count ? this.getById(actor, id) : null;

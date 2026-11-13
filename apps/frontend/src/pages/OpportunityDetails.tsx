@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,15 +28,16 @@ export default function OpportunityDetails() {
   const [editOpen, setEditOpen] = useState(false);
   const [confirmedSaleOpen, setConfirmedSaleOpen] = useState(false);
   const id = Number(useParams<{ id: string }>().id);
+  const fromDecisionSupport = new URLSearchParams(useLocation().search).get("from") === "decision-support";
   const displayCurrency = useUIStore((state) => state.displayCurrency);
   const { data: opportunity, isLoading, error } = useOpportunity(id);
   return (
     <section className="space-y-4">
       <Link
         className="text-primary hover:underline"
-        to="/dashboard/opportunities"
+        to={fromDecisionSupport ? "/dashboard/decision-support" : "/dashboard/opportunities"}
       >
-        ← Opportunities
+        ← {fromDecisionSupport ? "Decision Support" : "Opportunities"}
       </Link>
       {isLoading && <p>Loading opportunity...</p>}
       {error && (

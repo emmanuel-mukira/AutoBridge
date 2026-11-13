@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import { prisma } from "../client.js";
 import type {
   ListQuotationSeriesInput,
@@ -75,6 +76,56 @@ function access(actor: ClientActor): Prisma.QuotationWhereInput {
 }
 
 export class QuotationService {
+  async create(actor: ClientActor, opportunityId: number, input: QuotationDraftInput) {
+    if (new Date(input.validUntil) < new Date()) throw new Error("INVALID_VALID_UNTIL");
+    const opportunity = await prisma.opportunity.findFirst({
+      where: {
+        id: opportunityId,
+        ...(actor.role === "ADMIN" ? {} : { ownerId: actor.id, client: { ownerId: actor.id, deletedAt: null } }),
+      },
+      include: { client: true },
+    });
+    if (!opportunity) throw new Error("OPPORTUNITY_NOT_FOUND");
+    if (opportunity.stage === "CLOSED") throw new Error("OPPORTUNITY_CLOSED");
+    try {
+      return await prisma.$transaction(async (tx) => {
+        if (await tx.quotation.count({ where: { opportunityId } }))
+          throw new Error("QUOTATION_ALREADY_EXISTS");
+        const contact = input.contactId
+          ? await tx.contact.findFirst({ where: { id: input.contactId, clientId: opportunity.clientId } })
+          : null;
+        if (input.contactId && !contact) throw new Error("CONTACT_MISMATCH");
+        const lines = await catalogueLines(tx, input.items);
+        validatePrincipalCategory(lines, opportunity.productSubgroupId!);
+        const totals = quotationTotals(lines, input.discountPercent);
+        const quotation = await tx.quotation.create({
+          data: {
+            quoteNumber: `ABQ-${new Date().getUTCFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`,
+            opportunityId, clientId: opportunity.clientId, contactId: contact?.id ?? null,
+            createdById: actor.id, version: 1, status: "DRAFT", current: true,
+            currency: "KES", issueDate: null, validUntil: new Date(input.validUntil),
+            ...totals,
+            clientNameSnapshot: opportunity.client.businessName,
+            clientAddressSnapshot: `${opportunity.client.locationAddress}, ${opportunity.client.countyName}`,
+            contactNameSnapshot: contact ? `${contact.firstName} ${contact.lastName}` : null,
+            notes: input.notes || null, terms: input.terms || null,
+            items: { create: lines.map(quotationItemData) },
+          },
+          include: detailInclude,
+        });
+        const updated = await tx.opportunity.updateMany({ where: { id: opportunityId, stage: { not: "CLOSED" } }, data: {
+          estimatedAmount: totals.totalAmount, currency: "KES",
+        } });
+        if (!updated.count) throw new Error("OPPORTUNITY_CLOSED");
+        return quotation;
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")
+        throw new Error("QUOTATION_CONFLICT");
+      throw error;
+    }
+  }
+
   async listSeries(actor: ClientActor, filters: ListQuotationSeriesInput) {
     const where: Prisma.QuotationWhereInput = {
       ...access(actor),

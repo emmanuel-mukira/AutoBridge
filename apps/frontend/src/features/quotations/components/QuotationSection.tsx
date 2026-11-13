@@ -1,7 +1,7 @@
 import { useListPagination } from "@/hooks/useListPagination";
 import { TablePagination } from "@/components/shared/TablePagination";
 import { useState } from "react";
-import { CopyPlus, FileText, Pencil } from "lucide-react";
+import { CopyPlus, FileText, Pencil, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -52,7 +52,7 @@ export function QuotationSection({
   };
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="sm:flex-row sm:items-start sm:justify-between">
         <div>
           <CardTitle>Quotations</CardTitle>
           <CardDescription>
@@ -60,6 +60,11 @@ export function QuotationSection({
             opportunity value; acceptance does not mark it Won.
           </CardDescription>
         </div>
+        {query.data?.length === 0 && opportunity.stage !== "CLOSED" && (
+          <Button onClick={() => { setEditing(null); setDialogOpen(true); }}>
+            <Plus className="mr-2 h-4 w-4" /> Create quotation
+          </Button>
+        )}
       </CardHeader>
       <CardContent className="space-y-3">
         {query.isLoading && (

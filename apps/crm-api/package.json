@@ -13,6 +13,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "seed:dev": "tsx prisma/automotive/seed.ts",
+    "seed:weekly-demo": "npm run build && node scripts/seed-weekly-demo.mjs",
+    "seed:follow-up-demo": "npm run build && node scripts/seed-follow-up-demo.mjs",
     "verify:foundation": "node scripts/verify-foundation.mjs",
     "verify:opportunities": "node scripts/verify-opportunities.mjs",
     "verify:activities": "node scripts/verify-activities.mjs",
@@ -24,7 +26,10 @@
     "verify:quotations": "node scripts/verify-quotations.mjs",
     "verify:development-seed": "node scripts/verify-development-seed.mjs",
     "verify:user-management": "node scripts/verify-user-management.mjs",
-    "verify:currency": "node --experimental-strip-types scripts/verify-currency.ts"
+    "verify:currency": "node --experimental-strip-types scripts/verify-currency.ts",
+    "verify:weekly-optimization": "npm run build && node scripts/verify-follow-up-planning.mjs",
+    "verify:weekly-api": "node scripts/verify-weekly-api.mjs",
+    "verify:weekly-demo": "npm run build && node scripts/verify-follow-up-demo.mjs"
   },
   "keywords": [],
   "author": "",

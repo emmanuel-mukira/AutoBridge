@@ -20,11 +20,26 @@ model User {
   ownedOpportunities       Opportunity[]          @relation("OpportunityOwner")
   interactions             Interaction[]
   followUps                FollowUp[]
+  weeklySalesCapacities     WeeklySalesCapacity[]
   predictionReviews        PredictionReview[]
   verifiedRevenueSummaries ClientRevenueSummary[]
   createdQuotations        Quotation[]            @relation("QuotationCreator")
 
   @@index([role])
+}
+
+model WeeklySalesCapacity {
+  id               Int      @id @default(autoincrement())
+  userId           Int
+  weekStart        DateTime @db.Date
+  availableMinutes Int
+  correctionUsed   Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([userId, weekStart])
 }
 
 model Session {

@@ -18,7 +18,7 @@ function useActivityMutation<TVariables>(mutationFn: (variables: TVariables) => 
   const client = useQueryClient();
   return useMutation({
     mutationFn,
-    onSuccess: () => { client.invalidateQueries({ queryKey: activityKey }); toast.success(success); },
+    onSuccess: () => { client.invalidateQueries({ queryKey: activityKey }); client.invalidateQueries({ queryKey: ["weekly-allocation"] }); toast.success(success); },
     onError: (error) => toast.error(error.message),
   });
 }

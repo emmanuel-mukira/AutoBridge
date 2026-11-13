@@ -35,7 +35,7 @@ function OpportunitySelect({ value, onChange, disabled, opportunities }: { value
 
 type Context = { clientId?: number; opportunityId?: number };
 type InteractionForm = { clientId: string; opportunityId: string; interactionType: InteractionType; occurredAt: string; notes: string };
-type FollowUpForm = { clientId: string; opportunityId: string; title: string; channel: "" | InteractionType; dueAt: string };
+type FollowUpForm = { clientId: string; opportunityId: string; title: string; channel: "" | InteractionType; dueAt: string; estimatedMinutes: string; appointmentConfirmed: boolean };
 
 export function InteractionDialog({ open, onOpenChange, interaction, clientId, opportunityId }: Context & { open: boolean; onOpenChange: (open: boolean) => void; interaction?: Interaction }) {
   const save = useSaveInteraction();
@@ -81,11 +81,11 @@ export function FollowUpDialog({ open, onOpenChange, followUp, clientId, opportu
     if (!open) return;
     const tomorrow = new Date(Date.now() + 86_400_000);
     tomorrow.setHours(9, 0, 0, 0);
-    reset({ clientId: String(followUp?.clientId ?? clientId ?? ""), opportunityId: String(followUp?.opportunityId ?? opportunityId ?? ""), title: followUp?.title ?? "", channel: followUp?.channel ?? "", dueAt: toLocalInput(followUp?.dueAt ?? tomorrow) });
+    reset({ clientId: String(followUp?.clientId ?? clientId ?? ""), opportunityId: String(followUp?.opportunityId ?? opportunityId ?? ""), title: followUp?.title ?? "", channel: followUp?.channel ?? "", dueAt: toLocalInput(followUp?.dueAt ?? tomorrow), estimatedMinutes: followUp?.estimatedMinutes == null ? "" : String(followUp.estimatedMinutes), appointmentConfirmed: followUp?.appointmentConfirmed ?? false });
   }, [clientId, followUp, open, opportunityId, reset]);
 
   const submit = async (values: FollowUpForm) => {
-    const input: FollowUpInput = { clientId: Number(values.clientId), opportunityId: Number(values.opportunityId), title: values.title, channel: values.channel as InteractionType, dueAt: new Date(values.dueAt).toISOString() };
+    const input: FollowUpInput = { clientId: Number(values.clientId), opportunityId: Number(values.opportunityId), title: values.title, channel: values.channel as InteractionType, dueAt: new Date(values.dueAt).toISOString(), estimatedMinutes: values.estimatedMinutes ? Number(values.estimatedMinutes) : null, appointmentConfirmed: (values.channel === "MEETING" || values.channel === "SITE_VISIT") && values.appointmentConfirmed };
     await save.mutateAsync({ id: followUp?.id, input });
     onOpenChange(false);
   };
@@ -98,6 +98,8 @@ export function FollowUpDialog({ open, onOpenChange, followUp, clientId, opportu
       <div className="space-y-2 sm:col-span-2"><Label htmlFor="follow-up-title">Next action *</Label><Input id="follow-up-title" maxLength={200} placeholder="Call procurement manager" {...register("title", { required: "Next action is required" })} />{errors.title && <p className="text-sm text-destructive">{errors.title.message}</p>}</div>
       <div className="space-y-2"><Label htmlFor="follow-up-channel">Channel *</Label><Controller name="channel" control={control} rules={{ required: "Channel is required" }} render={({ field }) => <Select value={field.value} onValueChange={field.onChange}><SelectTrigger id="follow-up-channel"><SelectValue placeholder="Select channel" /></SelectTrigger><SelectContent>{interactionTypes.map((type) => <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>)}</SelectContent></Select>} />{errors.channel && <p className="text-sm text-destructive">{errors.channel.message}</p>}</div>
       <div className="space-y-2"><Label htmlFor="follow-up-date">Due date and time *</Label><Input id="follow-up-date" type="datetime-local" {...register("dueAt", { required: "Due date and time are required" })} />{errors.dueAt && <p className="text-sm text-destructive">{errors.dueAt.message}</p>}</div>
+      <div className="space-y-2"><Label htmlFor="follow-up-duration">Estimated minutes</Label><Input id="follow-up-duration" type="number" min="15" max="4800" step="15" placeholder="Use type default" {...register("estimatedMinutes", { validate: (value) => !value || (Number.isInteger(Number(value)) && Number(value) >= 15 && Number(value) <= 4800 && Number(value) % 15 === 0) || "Use 15-minute increments" })} /><p className="text-xs text-muted-foreground">Defaults: email 15, call 30, meeting 60, site visit 120, other 30. Planning estimate only.</p>{errors.estimatedMinutes && <p className="text-sm text-destructive">{errors.estimatedMinutes.message}</p>}</div>
+      {(watch("channel") === "MEETING" || watch("channel") === "SITE_VISIT") && <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4" {...register("appointmentConfirmed")} />Confirmed appointment</label>}
       {save.error && <p role="alert" className="text-sm text-destructive sm:col-span-2">{save.error.message}</p>}
       <div className="flex justify-end gap-2 sm:col-span-2"><Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button type="submit" disabled={save.isPending}>{save.isPending ? "Saving..." : "Save follow-up"}</Button></div>
     </form>

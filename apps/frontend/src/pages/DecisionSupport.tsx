@@ -21,6 +21,7 @@ import { useAnalyticsStore } from "@/features/analytics/store/analyticsStore";
 import { opportunityStageLabels } from "@/features/opportunities/utils/labels";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ModelPerformancePanel } from "@/features/analytics/components/ModelPerformancePanel";
+import { WeeklyOpportunityAllocation } from "@/features/analytics/components/WeeklyOpportunityAllocation";
 
 const probabilityConfig = { count: { label: "Opportunities", color: "var(--primary)" } } satisfies ChartConfig;
 const statusLabels: Record<PredictionStatus, string> = { CURRENT: "Current", STALE: "Stale", UNSCORED: "Not scored" };
@@ -96,6 +97,7 @@ function OpportunityDecisionSupport() {
 
   return (
     <div className="space-y-6 pb-8">
+      <WeeklyOpportunityAllocation />
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">

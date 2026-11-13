@@ -461,11 +461,12 @@ export function OpportunityDialog({
                             <Input
                               id={`opportunity-quantity-${line.product.id}`}
                               type="number"
-                              min="0.001"
-                              step="0.001"
+                              min="1"
+                              step="1"
                               required
                               value={line.quantity}
-                              onChange={(event) =>
+                              onChange={(event) => {
+                                if (!/^\d*$/.test(event.target.value)) return;
                                 setLines((current) =>
                                   current.map((item, itemIndex) =>
                                     itemIndex === index
@@ -475,8 +476,8 @@ export function OpportunityDialog({
                                         }
                                       : item,
                                   ),
-                                )
-                              }
+                                );
+                              }}
                             />
                           </div>
                           <Button
