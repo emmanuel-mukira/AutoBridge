@@ -14,6 +14,17 @@ export const useFollowUps = (filters: ActivityFilters = {}) => useQuery({
   queryFn: () => activitiesApi.listFollowUps(filters),
 });
 
+export const useFollowUpAvailability = (clientId: number, day: string) => useQuery({
+  queryKey: [...activityKey, "availability", clientId, day],
+  enabled: clientId > 0 && /^\d{4}-\d{2}-\d{2}$/.test(day),
+  queryFn: () => {
+    const start = new Date(`${day}T00:00:00`);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    return activitiesApi.followUpAvailability(clientId, start.toISOString(), end.toISOString());
+  },
+});
+
 function useActivityMutation<TVariables>(mutationFn: (variables: TVariables) => Promise<unknown>, success: string) {
   const client = useQueryClient();
   return useMutation({

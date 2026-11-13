@@ -148,7 +148,7 @@ export class WeeklyAllocationService {
       ? optimizeWeekly(candidates, remainingMinutes!) : null;
     const recommended = result
       ? candidates.filter((item) => result.optimal.ids.includes(item.id))
-        .sort((a, b) => new Prisma.Decimal(b.expectedValueUsd).comparedTo(a.expectedValueUsd) || a.id - b.id)
+        .sort((a, b) => new Prisma.Decimal(b.expectedValueUsd).comparedTo(a.expectedValueUsd) || a.dueAt.getTime() - b.dueAt.getTime() || a.id - b.id)
       : [];
     const unselected = candidates.filter((item) => !result?.optimal.ids.includes(item.id))
       .map((item) => followUpView(followUps.find((followUp) => followUp.id === item.id)!));

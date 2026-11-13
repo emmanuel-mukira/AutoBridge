@@ -67,6 +67,7 @@ export interface ActivityFilters {
 }
 
 export const activitiesApi = {
+  followUpAvailability: async (clientId: number, start: string, end: string) => (await http.get<{ id: number; start: string; end: string }[]>("/api/follow-ups/availability", { params: { clientId, start, end } })).data,
   listInteractions: async (filters: ActivityFilters = {}) => (await http.get<{ interactions: Interaction[]; pagination: { total: number } }>("/api/interactions", { params: filters })).data,
   createInteraction: async (input: InteractionInput) => (await http.post<Interaction>("/api/interactions", input)).data,
   updateInteraction: async (id: number, input: Partial<Pick<InteractionInput, "opportunityId" | "interactionType" | "notes" | "occurredAt">>) => (await http.patch<Interaction>(`/api/interactions/${id}`, input)).data,

@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { FollowUpService } from "../services/followUpService.js";
-import { CreateFollowUpSchema, FollowUpIdSchema, ListFollowUpsSchema, UpdateFollowUpSchema } from "../schemas/followUp.schemas.js";
+import { CreateFollowUpSchema, FollowUpAvailabilitySchema, FollowUpIdSchema, ListFollowUpsSchema, UpdateFollowUpSchema } from "../schemas/followUp.schemas.js";
 
 const service = new FollowUpService();
 
@@ -12,7 +12,12 @@ function referenceError(error: unknown, res: Response): boolean {
     CLIENT_OWNER_MISMATCH: "Follow-up owner must own the selected client",
     OPPORTUNITY_MISMATCH: "Opportunity not found or does not belong to the selected client",
     INVALID_APPOINTMENT_CONFIRMATION: "Only meetings and site visits can be confirmed appointments",
+    INVALID_FOLLOW_UP_CHANNEL: "Choose call, email, meeting or site visit",
   };
+  if (error.message === "FOLLOW_UP_TIME_CONFLICT") {
+    res.status(409).json({ error: "This time overlaps another pending follow-up for this sales representative" });
+    return true;
+  }
   if (!messages[error.message]) return false;
   res.status(400).json({ error: messages[error.message] });
   return true;
@@ -29,6 +34,14 @@ export async function list(req: Request, res: Response, next: NextFunction) {
   const parsed = ListFollowUpsSchema.safeParse(req.query);
   if (!parsed.success) return void res.status(400).json({ error: "Invalid query parameters" });
   try { res.json(await service.list(req.user!, parsed.data)); } catch (error) { next(error); }
+}
+
+export async function availability(req: Request, res: Response, next: NextFunction) {
+  const parsed = FollowUpAvailabilitySchema.safeParse(req.query);
+  if (!parsed.success) return void res.status(400).json({ error: "Invalid availability request" });
+  try {
+    res.json(await service.availability(req.user!, parsed.data.clientId, new Date(parsed.data.start), new Date(parsed.data.end)));
+  } catch (error) { if (!referenceError(error, res)) next(error); }
 }
 
 export async function getById(req: Request, res: Response, next: NextFunction) {

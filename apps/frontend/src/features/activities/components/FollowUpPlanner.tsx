@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useCompleteFollowUp } from "../hooks/useActivities";
 import type { FollowUp } from "../services/activitiesApi";
 
-const channelLabels = { CALL: "Call", EMAIL: "Email", MEETING: "Meeting", SITE_VISIT: "Site visit", FOLLOW_UP: "Other" } as const;
+const channelLabels = { CALL: "Call", EMAIL: "Email", MEETING: "Meeting", SITE_VISIT: "Site visit", FOLLOW_UP: "Follow-up" } as const;
 
 export function FollowUpPlanner({ followUps, isLoading, onEdit, pagination }: { followUps: FollowUp[]; isLoading: boolean; onEdit: (followUp: FollowUp) => void; pagination?: TablePaginationProps }) {
   const complete = useCompleteFollowUp();

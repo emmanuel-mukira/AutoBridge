@@ -5,6 +5,7 @@ import * as controller from "../controllers/followUp.controller.js";
 const router = Router();
 router.use(requireAuth);
 router.get("/", controller.list);
+router.get("/availability", controller.availability);
 router.get("/:id", controller.getById);
 router.post("/", requireTrustedOrigin, requireCsrf, controller.create);
 router.patch("/:id/complete", requireTrustedOrigin, requireCsrf, controller.complete);

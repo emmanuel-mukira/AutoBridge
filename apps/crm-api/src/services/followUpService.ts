@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../client.js";
 import { followUpMinutes } from "./weeklyPlanningRules.js";
+import { followUpsOverlap } from "./followUpSchedule.js";
 import type { ClientActor } from "./clientService.js";
 import type { CreateFollowUpInput, ListFollowUpsInput, UpdateFollowUpInput } from "../schemas/followUp.schemas.js";
 
@@ -18,6 +19,27 @@ function access(actor: ClientActor): Prisma.FollowUpWhereInput {
 }
 
 export class FollowUpService {
+  private async assertAvailable(tx: Prisma.TransactionClient, ownerId: number, dueAt: Date, minutes: number, excludeId?: number) {
+    // The owner lock serializes competing schedule writes across API instances.
+    await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(${ownerId})`;
+    const end = new Date(dueAt.getTime() + minutes * 60_000);
+    const existing = await tx.followUp.findMany({
+      where: { ownerId, completedAt: null, dueAt: { gte: new Date(dueAt.getTime() - 4_800 * 60_000), lt: end }, ...(excludeId ? { id: { not: excludeId } } : {}) },
+      select: { dueAt: true, estimatedMinutes: true, channel: true },
+    });
+    if (existing.some((item) => followUpsOverlap(dueAt, minutes, item.dueAt, item.estimatedMinutes ?? followUpMinutes(item.channel)))) throw new Error("FOLLOW_UP_TIME_CONFLICT");
+  }
+
+  async availability(actor: ClientActor, clientId: number, start: Date, end: Date) {
+    const client = await prisma.client.findFirst({ where: { id: clientId, deletedAt: null, ...(actor.role === "SALES_REP" ? { ownerId: actor.id } : {}) }, select: { ownerId: true } });
+    if (!client) throw new Error("CLIENT_NOT_FOUND");
+    const items = await prisma.followUp.findMany({
+      where: { ownerId: client.ownerId, completedAt: null, dueAt: { gte: new Date(start.getTime() - 4_800 * 60_000), lt: end } },
+      select: { id: true, dueAt: true, estimatedMinutes: true, channel: true }, orderBy: { dueAt: "asc" },
+    });
+    return items.filter((item) => item.dueAt.getTime() + (item.estimatedMinutes ?? followUpMinutes(item.channel)) * 60_000 > start.getTime())
+      .map((item) => ({ id: item.id, start: item.dueAt, end: new Date(item.dueAt.getTime() + (item.estimatedMinutes ?? followUpMinutes(item.channel)) * 60_000) }));
+  }
   private async validateReferences(actor: ClientActor, input: CreateFollowUpInput) {
     const client = await prisma.client.findFirst({
       where: { id: input.clientId, deletedAt: null, ...(actor.role === "SALES_REP" ? { ownerId: actor.id } : {}) },
@@ -36,9 +58,13 @@ export class FollowUpService {
   async create(actor: ClientActor, input: CreateFollowUpInput) {
     const ownerId = await this.validateReferences(actor, input);
     if (input.appointmentConfirmed && !["MEETING", "SITE_VISIT"].includes(input.channel)) throw new Error("INVALID_APPOINTMENT_CONFIRMATION");
-    return prisma.followUp.create({
-      data: { clientId: input.clientId, opportunityId: input.opportunityId, ownerId, title: input.title.trim(), channel: input.channel, dueAt: new Date(input.dueAt), estimatedMinutes: input.estimatedMinutes ?? followUpMinutes(input.channel), appointmentConfirmed: input.appointmentConfirmed },
-      include,
+    const dueAt = new Date(input.dueAt);
+    const estimatedMinutes = input.estimatedMinutes ?? followUpMinutes(input.channel);
+    return prisma.$transaction(async (tx) => {
+      await this.assertAvailable(tx, ownerId, dueAt, estimatedMinutes);
+      return tx.followUp.create({
+        data: { clientId: input.clientId, opportunityId: input.opportunityId, ownerId, title: input.title.trim(), channel: input.channel, dueAt, estimatedMinutes, appointmentConfirmed: input.appointmentConfirmed }, include,
+      });
     });
   }
 
@@ -71,6 +97,7 @@ export class FollowUpService {
     const current = await this.getById(actor, id);
     if (!current) return null;
     const channel = input.channel ?? current.channel;
+    if (input.channel === "FOLLOW_UP" && current.channel !== "FOLLOW_UP") throw new Error("INVALID_FOLLOW_UP_CHANNEL");
     const confirmed = input.appointmentConfirmed ?? (input.channel && input.channel !== current.channel ? false : current.appointmentConfirmed);
     const estimatedMinutes = input.estimatedMinutes !== undefined
       ? input.estimatedMinutes ?? followUpMinutes(channel)
@@ -84,16 +111,18 @@ export class FollowUpService {
       });
       if (!opportunity) throw new Error("OPPORTUNITY_MISMATCH");
     }
-    const updated = await prisma.followUp.updateMany({
-      where: { ...access(actor), id },
-      data: {
+    const updated = await prisma.$transaction(async (tx) => {
+      if (!current.completedAt) await this.assertAvailable(tx, current.ownerId, new Date(input.dueAt ?? current.dueAt), estimatedMinutes ?? followUpMinutes(channel), id);
+      return tx.followUp.updateMany({
+        where: { ...access(actor), id }, data: {
         ...(input.opportunityId !== undefined ? { opportunityId: input.opportunityId } : {}),
         ...(input.title !== undefined ? { title: input.title.trim() } : {}),
         ...(input.channel !== undefined ? { channel: input.channel } : {}),
         ...(input.dueAt !== undefined ? { dueAt: new Date(input.dueAt) } : {}),
         estimatedMinutes,
         appointmentConfirmed: confirmed,
-      },
+        },
+      });
     });
     return updated.count ? this.getById(actor, id) : null;
   }
