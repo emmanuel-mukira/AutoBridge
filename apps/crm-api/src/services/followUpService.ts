@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../client.js";
+import { followUpMinutes } from "./weeklyPlanningRules.js";
 import type { ClientActor } from "./clientService.js";
 import type { CreateFollowUpInput, ListFollowUpsInput, UpdateFollowUpInput } from "../schemas/followUp.schemas.js";
 
@@ -36,7 +37,7 @@ export class FollowUpService {
     const ownerId = await this.validateReferences(actor, input);
     if (input.appointmentConfirmed && !["MEETING", "SITE_VISIT"].includes(input.channel)) throw new Error("INVALID_APPOINTMENT_CONFIRMATION");
     return prisma.followUp.create({
-      data: { clientId: input.clientId, opportunityId: input.opportunityId, ownerId, title: input.title.trim(), channel: input.channel, dueAt: new Date(input.dueAt), estimatedMinutes: input.estimatedMinutes ?? null, appointmentConfirmed: input.appointmentConfirmed },
+      data: { clientId: input.clientId, opportunityId: input.opportunityId, ownerId, title: input.title.trim(), channel: input.channel, dueAt: new Date(input.dueAt), estimatedMinutes: input.estimatedMinutes ?? followUpMinutes(input.channel), appointmentConfirmed: input.appointmentConfirmed },
       include,
     });
   }
@@ -71,6 +72,10 @@ export class FollowUpService {
     if (!current) return null;
     const channel = input.channel ?? current.channel;
     const confirmed = input.appointmentConfirmed ?? (input.channel && input.channel !== current.channel ? false : current.appointmentConfirmed);
+    const estimatedMinutes = input.estimatedMinutes !== undefined
+      ? input.estimatedMinutes ?? followUpMinutes(channel)
+      : input.channel && (current.estimatedMinutes === null || current.estimatedMinutes === followUpMinutes(current.channel))
+        ? followUpMinutes(channel) : current.estimatedMinutes;
     if (confirmed && !["MEETING", "SITE_VISIT"].includes(channel ?? "")) throw new Error("INVALID_APPOINTMENT_CONFIRMATION");
     if (input.opportunityId !== undefined) {
       const opportunity = await prisma.opportunity.findFirst({
@@ -86,7 +91,7 @@ export class FollowUpService {
         ...(input.title !== undefined ? { title: input.title.trim() } : {}),
         ...(input.channel !== undefined ? { channel: input.channel } : {}),
         ...(input.dueAt !== undefined ? { dueAt: new Date(input.dueAt) } : {}),
-        ...(input.estimatedMinutes !== undefined ? { estimatedMinutes: input.estimatedMinutes } : {}),
+        estimatedMinutes,
         appointmentConfirmed: confirmed,
       },
     });

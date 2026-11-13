@@ -85,12 +85,12 @@ export class WeeklyAllocationService {
     const availableMinutes = capacity?.availableMinutes ?? null;
     const remainingMinutes = availableMinutes === null ? null : Math.max(0, availableMinutes - work.completedMinutes);
     const overbooked = availableMinutes !== null && work.completedMinutes > availableMinutes;
-    const pendingByOpportunity = new Map<number, PlanningFollowUp>();
+    const pendingByOpportunity = new Map<number, PlanningFollowUp[]>();
     const otherPending: ReturnType<typeof followUpView>[] = [];
     for (const item of work.pending) {
-      if (item.opportunityId === null || pendingByOpportunity.has(item.opportunityId))
+      if (item.opportunityId === null || work.overdueIds.has(item.id))
         otherPending.push(followUpView(item));
-      else pendingByOpportunity.set(item.opportunityId, item);
+      else pendingByOpportunity.set(item.opportunityId, [...(pendingByOpportunity.get(item.opportunityId) ?? []), item]);
     }
     const evidence = await this.salesHistory.evidenceForClients(
       actor, [...new Set(opportunities.map((item) => item.clientId))], now,
@@ -99,8 +99,8 @@ export class WeeklyAllocationService {
     const excluded: { id: number; title: string; reason: string }[] = [];
     const withoutFollowUps: { id: number; title: string }[] = [];
     for (const opportunity of opportunities) {
-      const followUp = pendingByOpportunity.get(opportunity.id);
-      if (!followUp) {
+      const actions = pendingByOpportunity.get(opportunity.id);
+      if (!actions?.length) {
         if (!followUps.some((item) => item.opportunityId === opportunity.id && !item.completedAt))
           withoutFollowUps.push({ id: opportunity.id, title: opportunity.title });
         continue;
@@ -122,27 +122,27 @@ export class WeeklyAllocationService {
         reason = "Stale prediction";
       if (reason) {
         excluded.push({ id: opportunity.id, title: opportunity.title, reason });
-        otherPending.push(followUpView(followUp));
+        otherPending.push(...actions.map(followUpView));
         continue;
       }
       const valueUsd = new Prisma.Decimal(current!.conversion.modelReadyAmountUsd);
       if (!valueUsd.isFinite() || valueUsd.isNegative()) {
         excluded.push({ id: opportunity.id, title: opportunity.title, reason: "Invalid estimated value" });
-        otherPending.push(followUpView(followUp));
+        otherPending.push(...actions.map(followUpView));
         continue;
       }
-      candidates.push({
+      for (const followUp of actions) candidates.push({
         id: followUp.id, opportunityId: opportunity.id, title: opportunity.title,
         clientName: followUp.client.businessName, channel: followUp.channel, dueAt: followUp.dueAt,
         probability: Number(prediction!.wonProbability),
         valueUsd: valueUsd.toFixed(2),
         expectedValueUsd: valueUsd.times(prediction!.wonProbability).toFixed(2),
         effortMinutes: activityMinutes(followUp),
-        attention: work.overdueIds.has(followUp.id) ? "OVERDUE" : null,
+        attention: null,
       });
     }
-    for (const [opportunityId, followUp] of pendingByOpportunity)
-      if (!opportunities.some((item) => item.id === opportunityId)) otherPending.push(followUpView(followUp));
+    for (const [opportunityId, actions] of pendingByOpportunity)
+      if (!opportunities.some((item) => item.id === opportunityId)) otherPending.push(...actions.map(followUpView));
     if (candidates.length > 200) throw new Error("TOO_MANY_CANDIDATES");
     const result = availableMinutes !== null && !overbooked
       ? optimizeWeekly(candidates, remainingMinutes!) : null;

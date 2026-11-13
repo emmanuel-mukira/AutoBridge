@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Link } from "react-router-dom";
 import {
   KanbanBoard,
@@ -30,6 +31,7 @@ const columns = (Object.keys(opportunityStageLabels) as OpportunityStage[]).map(
 }));
 
 export function OpportunityKanbanBoard({ opportunities, displayCurrency, onEdit, onStageDrop, movingId }: { opportunities: Opportunity[]; displayCurrency: DisplayCurrency; onEdit: (opportunity: Opportunity) => void; onStageDrop: (opportunity: Opportunity, stage: OpportunityStage) => void; movingId?: number }) {
+  const hoveredStage = useRef<OpportunityStage | null>(null);
   const cards: KanbanOpportunity[] = opportunities.map((opportunity) => ({
     ...opportunity,
     id: String(opportunity.id),
@@ -41,13 +43,14 @@ export function OpportunityKanbanBoard({ opportunities, displayCurrency, onEdit,
   const handleDragEnd = (event: DragEndEvent) => {
     if (!event.over) return;
     const card = cards.find((item) => item.id === event.active.id);
-    const target = columns.find((column) => column.id === event.over?.id)?.id ?? cards.find((item) => item.id === event.over?.id)?.column;
+    const target = hoveredStage.current ?? columns.find((column) => column.id === event.over?.id)?.id ?? cards.find((item) => item.id === event.over?.id)?.column;
+    hoveredStage.current = null;
     const opportunity = card && opportunities.find((item) => item.id === card.opportunityId);
     if (opportunity && target && target !== opportunity.stage) onStageDrop(opportunity, target);
   };
 
   return <div className="overflow-x-auto pb-2">
-    <KanbanProvider className="min-w-[1100px]" columns={columns} data={cards} canDrag={(item) => item.stage !== "CLOSED" && movingId === undefined} onDragEnd={handleDragEnd}>
+    <KanbanProvider className="min-w-[1100px]" columns={columns} data={cards} canDrag={(item) => item.stage !== "CLOSED" && movingId === undefined} onDragStart={() => { hoveredStage.current = null; }} onDragOver={(event) => { if (event.over) hoveredStage.current = columns.find((column) => column.id === event.over?.id)?.id ?? cards.find((item) => item.id === event.over?.id)?.column ?? null; }} onDragEnd={handleDragEnd} onDragCancel={() => { hoveredStage.current = null; }}>
       {(column) => {
         const count = cards.filter((card) => card.column === column.id).length;
         return <KanbanBoard key={column.id} id={column.id} className="min-h-[260px] bg-slate-50 dark:bg-slate-950">

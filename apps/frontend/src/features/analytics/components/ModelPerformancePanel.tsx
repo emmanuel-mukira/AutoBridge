@@ -1,5 +1,3 @@
-import { useListPagination } from "@/hooks/useListPagination";
-import { TablePagination } from "@/components/shared/TablePagination";
 import { Bar, BarChart, CartesianGrid, Legend, XAxis, YAxis } from "recharts";
 import { useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -31,9 +29,8 @@ const percent = (value: number | null) =>
   value === null ? "—" : `${(value * 100).toFixed(1)}%`;
 
 export function ModelPerformancePanel() {
-  const [source, setSource] = useState<"demo" | "application">("demo");
+  const [source, setSource] = useState<"demo" | "application">("application");
   const query = useModelPerformance();
-  const bandPages = useListPagination((source === "demo" ? query.data?.demonstrationReliability.bins : query.data?.reliability.bins)?.filter((bin) => bin.count > 0) ?? []);
   if (query.isPending) return <Skeleton className="h-80 w-full" />;
   if (query.isError)
     return (
@@ -53,13 +50,7 @@ export function ModelPerformancePanel() {
       ? query.data.demonstrationReliability
       : query.data.reliability;
   const high = reliability.atLeast70;
-  const chart = reliability.bins
-    .filter((bin) => bin.count > 0)
-    .map((bin) => ({
-      ...bin,
-      predicted: (bin.meanPrediction ?? 0) * 100,
-      observed: (bin.observedWinRate ?? 0) * 100,
-    }));
+  const chart = reliability.bins.filter((bin) => bin.count > 0);
 
   return (
     <div className="space-y-5">
@@ -152,16 +143,20 @@ export function ModelPerformancePanel() {
             )}
           </div>
           <p className="text-sm text-muted-foreground">
-            Compare the average predicted chance with the actual win rate in
-            each probability band.
+            Won and Lost outcomes by the probability predicted before each opportunity closed.
           </p>
+          {source === "application" && (
+            <p className="text-xs text-muted-foreground">
+              Seeded Demo outcome records are illustrative sales results, not independent evidence of model accuracy.
+            </p>
+          )}
           {chart.length ? (
             <>
               <ChartContainer
                 className="h-64 w-full min-w-0 aspect-auto"
                 config={{
-                  predicted: { label: "Average prediction", color: "#2563eb" },
-                  observed: { label: "Actual win rate", color: "#16a34a" },
+                  won: { label: "Won", color: "#16a34a" },
+                  lost: { label: "Lost", color: "#ef4444" },
                 }}
               >
                 <BarChart
@@ -172,8 +167,7 @@ export function ModelPerformancePanel() {
                   <CartesianGrid vertical={false} />
                   <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} minTickGap={0} interval={0} angle={-35} textAnchor="end" height={48} />
                   <YAxis
-                    domain={[0, 100]}
-                    tickFormatter={(value: number) => `${value}%`}
+                    allowDecimals={false}
                     tickLine={false}
                     axisLine={false}
                     width={44}
@@ -183,7 +177,7 @@ export function ModelPerformancePanel() {
                       <ChartTooltipContent
                         formatter={(value, name) => (
                           <span>
-                            {name}: {Number(value).toFixed(1)}%
+                            {name}: {Number(value)}
                           </span>
                         )}
                       />
@@ -191,16 +185,16 @@ export function ModelPerformancePanel() {
                   />
                   <Legend />
                   <Bar
-                    name="Average prediction"
-                    dataKey="predicted"
-                    fill="var(--color-predicted)"
+                    name="Won"
+                    dataKey="won"
+                    fill="var(--color-won)"
                     radius={[3, 3, 0, 0]}
                     isAnimationActive={false}
                   />
                   <Bar
-                    name="Actual win rate"
-                    dataKey="observed"
-                    fill="var(--color-observed)"
+                    name="Lost"
+                    dataKey="lost"
+                    fill="var(--color-lost)"
                     radius={[3, 3, 0, 0]}
                     isAnimationActive={false}
                   />
@@ -219,7 +213,7 @@ export function ModelPerformancePanel() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {bandPages.visibleItems.map((bin) => (
+                    {chart.map((bin) => (
                         <TableRow key={bin.label}>
                           <TableCell>{bin.label}</TableCell>
                           <TableCell>{bin.count}</TableCell>
@@ -231,7 +225,6 @@ export function ModelPerformancePanel() {
                       ))}
                   </TableBody>
                 </Table>
-                <TablePagination {...bandPages.pagination} />
               </div>
             </>
           ) : (

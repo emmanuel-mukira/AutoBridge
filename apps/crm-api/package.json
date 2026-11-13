@@ -14,7 +14,7 @@
     "format:check": "prettier --check .",
     "seed:dev": "tsx prisma/automotive/seed.ts",
     "seed:weekly-demo": "npm run build && node scripts/seed-weekly-demo.mjs",
-    "seed:follow-up-demo": "npm run build && node scripts/seed-follow-up-demo.mjs",
+    "seed:follow-up-demo": "npm run seed:weekly-demo",
     "verify:foundation": "node scripts/verify-foundation.mjs",
     "verify:opportunities": "node scripts/verify-opportunities.mjs",
     "verify:activities": "node scripts/verify-activities.mjs",

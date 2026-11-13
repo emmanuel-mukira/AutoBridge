@@ -105,7 +105,7 @@ export function OpportunityPredictionCard({
                 <div className="flex max-w-xs flex-wrap justify-end gap-2">
                   <Badge variant="secondary">
                     {latest.modelVariant === "PRIMARY"
-                      ? "Standard"
+                      ? "Verified history"
                       : "Limited history"}
                   </Badge>
                   <Badge
@@ -191,7 +191,7 @@ export function OpportunityPredictionCard({
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {item.modelVariant === "PRIMARY"
-                          ? "Standard"
+                          ? "Verified history"
                           : "Limited history"}
                       </p>
                     </div>

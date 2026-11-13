@@ -134,9 +134,9 @@ export async function getModelPerformance() {
     },
     reliability: {
       ...predictionReliability(resolved, metadata.model_version),
-      source: "Live recorded outcomes · all time · primary model only",
+      source: "Recorded application outcomes · all time · both model variants",
       explanation:
-        "Each resolved opportunity counts once, using its latest prediction saved at or before the outcome. Open opportunities and limited-history predictions are excluded.",
+        "Each resolved opportunity counts once, using its latest prediction saved at or before the outcome. Open opportunities are excluded.",
       warning:
         "Small samples can vary substantially. Recorded outcomes, including any demonstration records, do not establish independent model validation.",
     },

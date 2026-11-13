@@ -372,30 +372,18 @@ try {
           (!matches[0] ||
             (matches[0].clientId === client.id &&
               matches[0].ownerId === rep.id &&
-              matches[0].outcome === null &&
-              matches[0].productSubgroupId === product.productSubgroupId &&
-              matches[0].routeToMarket === route)),
+              matches[0].outcome === null)),
         `Conflicting demo opportunity: ${item.title}`,
       );
-      const opportunity =
-        matches[0] ??
-        (await prisma.opportunity.create({
-          data: {
-            clientId: client.id,
-            ownerId: rep.id,
-            productSubgroupId: product.productSubgroupId,
-            title,
-            estimatedAmount: amount,
-            currency: "KES",
-            routeToMarket: route,
-            estimatedCloseAt: new Date(now.getTime() + 21 * 86_400_000),
-            ...([10, 12, 14].includes(index)
-              ? { createdAt: new Date(now.getTime() - 45 * 86_400_000) }
-              : {}),
-          },
-        }));
-      if (item.stage && opportunity.stage !== item.stage) {
-        assert.equal(opportunity.stage, "NEW", `Unexpected stage for ${title}`);
+      const opportunity = matches[0] ?? await opportunityService.create(
+        { id: rep.id, role: "SALES_REP" },
+        { clientId: client.id, productSubgroupId: product.productSubgroupId, title,
+          routeToMarket: route, estimatedCloseAt: new Date(now.getTime() + 21 * 86_400_000).toISOString(),
+          items: [{ productId: product.id, quantity: item.quantity }] },
+      );
+      if (!matches[0] && [10, 12, 14].includes(index))
+        await prisma.opportunity.update({ where: { id: opportunity.id }, data: { createdAt: new Date(now.getTime() - 45 * 86_400_000) } });
+      if (!matches[0] && item.stage && opportunity.stage !== item.stage) {
         await opportunityService.transition(
           { id: rep.id, role: "SALES_REP" },
           opportunity.id,
@@ -559,6 +547,91 @@ try {
       counts[prediction.modelVariant] += 1;
       if (prediction.reused) counts.reused += 1;
     }
+    const actor = { id: rep.id, role: "SALES_REP" };
+    const outcomeClientName = `Demo Outcome Account [rep ${rep.id}]`;
+    const outcomeClients = await prisma.client.findMany({ where: { businessName: outcomeClientName } });
+    assert.ok(outcomeClients.length <= 1 && (!outcomeClients[0] ||
+      (outcomeClients[0].ownerId === rep.id && !outcomeClients[0].deletedAt)),
+      `Conflicting demo outcome client: ${outcomeClientName}`);
+    const outcomeClient = outcomeClients[0] ?? await prisma.client.create({ data: {
+      businessName: outcomeClientName, countyName: "Nairobi", locationAddress: "Development demo",
+      shortHistory: "Illustrative Won and Lost outcomes for model monitoring.", ownerId: rep.id,
+    } });
+    const outcomeExamples = [
+      ["Battery fleet order", "AB-BAT-001", "4", "WON"],
+      ["Tyre fleet order", "AB-TYR-001", "12", "LOST"],
+      ["Service parts order", "AB-RPL-001", "35", "WON"],
+      ["Cooling system order", "AB-GCC-001", "15", "LOST"],
+      ["Garage tools order", "AB-RPL-005", "8", "WON"],
+      ["Vehicle accessories order", "AB-EXT-001", "25", "LOST"],
+    ];
+    for (const [name, sku, quantity, outcome] of outcomeExamples) {
+      const title = `Demo outcome: ${name} [rep ${rep.id}]`;
+      const product = productBySku.get(sku);
+      assert.ok(product, `Missing demo product ${sku}`);
+      const matches = await prisma.opportunity.findMany({ where: { title } });
+      assert.ok(matches.length <= 1 && (!matches[0] ||
+        (matches[0].clientId === outcomeClient.id && matches[0].ownerId === rep.id &&
+          [null, outcome].includes(matches[0].outcome))), `Conflicting demo outcome: ${title}`);
+      if (matches[0]?.outcome === outcome) continue;
+      const opportunity = matches[0] ?? await opportunityService.create(actor, {
+        clientId: outcomeClient.id, productSubgroupId: product.productSubgroupId, title,
+        routeToMarket: "FIELDS_SALES", items: [{ productId: product.id, quantity }],
+      });
+      const scored = await scoring.score(actor, opportunity.id);
+      assert.ok(scored?.explanation?.status === "available" && scored.modelVersion === "automotive_v1",
+        `Genuine model prediction required for ${title}`);
+      const closed = await opportunityService.transition(actor, opportunity.id, {
+        stage: "CLOSED", outcome,
+        ...(outcome === "WON" ? { confirmedAmount: opportunity.estimatedAmount.toString(), confirmedCurrency: "KES" } : {}),
+      });
+      assert.equal(closed?.outcome, outcome);
+    }
+    const demoMarker = "AUTOBRIDGE_FOLLOW_UP_DEMO";
+    const at = (day, hour = 10) => new Date(monday.getTime() + day * 86_400_000 + hour * 3_600_000);
+    const addFollowUp = async (opportunity, key, channel, dueAt, estimatedMinutes = null, appointmentConfirmed = false, completedAt = null) => {
+      const title = `${demoMarker}:${key}: ${opportunity.title}`;
+      const existing = await prisma.followUp.findFirst({ where: { opportunityId: opportunity.id, title } });
+      if (existing) {
+        assert.equal(existing.ownerId, rep.id);
+        if (!existing.completedAt && existing.dueAt.getTime() !== dueAt.getTime())
+          await prisma.followUp.update({ where: { id: existing.id }, data: { dueAt } });
+        return;
+      }
+      await prisma.followUp.create({ data: {
+        clientId: opportunity.clientId, opportunityId: opportunity.id, ownerId: rep.id,
+        title, channel, dueAt, estimatedMinutes, appointmentConfirmed, completedAt,
+      } });
+    };
+    const firstClient = await prisma.client.findUniqueOrThrow({ where: { id: opportunities[0].clientId } });
+    const baseProduct = productBySku.get("AB-BAT-001");
+    assert.ok(baseProduct, "Base automotive battery product is required");
+    for (const kind of ["Unscored", "Stale", "No-action"]) {
+      const title = `Demo: ${kind} follow-up ${demoMarker} rep ${rep.id}`;
+      let opportunity = await prisma.opportunity.findFirst({ where: { ownerId: rep.id, title } });
+      if (!opportunity) {
+        opportunity = await opportunityService.create(actor, {
+          clientId: firstClient.id, productSubgroupId: baseProduct.productSubgroupId,
+          title, routeToMarket: "FIELDS_SALES", items: [{ productId: baseProduct.id, quantity: "2" }],
+        });
+        if (kind !== "Unscored") {
+          const prediction = await scoring.score(actor, opportunity.id);
+          assert.equal(prediction.modelVersion, "automotive_v1");
+          if (kind === "Stale") opportunity = await opportunityService.update(actor, opportunity.id, { routeToMarket: "RESELLER" });
+        }
+      }
+      if (kind !== "No-action") await addFollowUp(opportunity, kind.toLowerCase(), "CALL", at(4), 30);
+    }
+    for (let index = 0; index < 16; index++)
+      await addFollowUp(opportunities[index], `flex-${index}`,
+        index % 3 === 0 ? "EMAIL" : "CALL", index === 12 ? at(-1) : at(index % 2 ? 4 : 5),
+        index % 4 === 0 ? 60 : index % 3 === 0 ? 15 : 30);
+    for (let index = 0; index < 4; index++) await addFollowUp(opportunities[index], `second-${index}`, "EMAIL", at(5), 15);
+    await addFollowUp(opportunities[17], "fixed-meeting", "MEETING", at(5, 9), 60, true);
+    await addFollowUp(opportunities[18], "fixed-visit", "SITE_VISIT", at(5, 13), 120, true);
+    await addFollowUp(opportunities[19], "future", "EMAIL", at(9), 15);
+    await addFollowUp(opportunities[0], "completed-current-week", "CALL", at(0), 30, false, now);
+    await addFollowUp(opportunities[1], "completed-prior-due-week", "MEETING", at(-5), 60, true, now);
     const preview = await allocation.plan(
       { id: rep.id, role: "SALES_REP" },
       weekStart,

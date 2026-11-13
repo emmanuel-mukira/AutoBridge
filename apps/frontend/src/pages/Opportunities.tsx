@@ -22,13 +22,17 @@ export default function Opportunities() {
   const [search, setSearch] = useState("");
   const [stage, setStage] = useState<"" | OpportunityStage>("");
   const [route, setRoute] = useState<"" | SalesRoute>("");
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(5);
+  const [listPage, setListPage] = useState(1);
+  const [listPageSize, setListPageSize] = useState(5);
+  const [boardPage, setBoardPage] = useState(1);
   const [view, setView] = useState("board");
   const displayCurrency = useUIStore((state) => state.displayCurrency);
+  const page = view === "board" ? boardPage : listPage;
+  const pageSize = view === "board" ? 20 : listPageSize;
   const { data, isLoading, error } = useOpportunities({ search: search || undefined, stage: stage || undefined, routeToMarket: route || undefined, page, limit: pageSize });
   const transition = useTransitionOpportunity();
   const opportunities = data?.opportunities ?? [];
+  const resetPages = () => { setListPage(1); setBoardPage(1); };
 
   const editOpportunity = (opportunity: Opportunity) => {
     setEditingOpportunity(opportunity);
@@ -53,10 +57,10 @@ export default function Opportunities() {
 
   return <section className="space-y-4">
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="text-2xl font-bold">Opportunities</h1><p className="mt-1 text-sm text-muted-foreground">Track B2B automotive sales through each pipeline stage.</p></div><Button className="w-full sm:w-auto" onClick={() => { setEditingOpportunity(undefined); setDialogOpen(true); }}><Plus className="mr-2 h-4 w-4" />New opportunity</Button></div>
-    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap" onChange={() => setPage(1)}>
-      <div className="relative w-full sm:max-w-xs"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" aria-label="Search opportunities" placeholder="Search opportunity title" value={search} onChange={(event) => setSearch(event.target.value)} /></div>
-      <Select value={stage || all} onValueChange={(value) => { setStage(value === all ? "" : value as OpportunityStage); setPage(1); }}><SelectTrigger className="w-full sm:w-40" aria-label="Filter by stage"><SelectValue /></SelectTrigger><SelectContent><SelectItem value={all}>All stages</SelectItem><SelectItem value="NEW">New</SelectItem><SelectItem value="QUALIFYING">Qualifying</SelectItem><SelectItem value="PROPOSAL">Proposal</SelectItem><SelectItem value="NEGOTIATION">Negotiation</SelectItem><SelectItem value="CLOSED">Closed</SelectItem></SelectContent></Select>
-      <Select value={route || all} onValueChange={(value) => { setRoute(value === all ? "" : value as SalesRoute); setPage(1); }}><SelectTrigger className="w-full sm:w-44" aria-label="Filter by sales route"><SelectValue /></SelectTrigger><SelectContent><SelectItem value={all}>All routes</SelectItem><SelectItem value="FIELDS_SALES">Field sales</SelectItem><SelectItem value="RESELLER">Reseller</SelectItem><SelectItem value="TELECOVERAGE">Telecoverage</SelectItem><SelectItem value="TELESALES">Telesales</SelectItem><SelectItem value="OTHER">Other</SelectItem></SelectContent></Select>
+    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+      <div className="relative w-full sm:max-w-xs"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" aria-label="Search opportunities" placeholder="Search opportunity title" value={search} onChange={(event) => { setSearch(event.target.value); resetPages(); }} /></div>
+      <Select value={stage || all} onValueChange={(value) => { setStage(value === all ? "" : value as OpportunityStage); resetPages(); }}><SelectTrigger className="w-full sm:w-40" aria-label="Filter by stage"><SelectValue /></SelectTrigger><SelectContent><SelectItem value={all}>All stages</SelectItem><SelectItem value="NEW">New</SelectItem><SelectItem value="QUALIFYING">Qualifying</SelectItem><SelectItem value="PROPOSAL">Proposal</SelectItem><SelectItem value="NEGOTIATION">Negotiation</SelectItem><SelectItem value="CLOSED">Closed</SelectItem></SelectContent></Select>
+      <Select value={route || all} onValueChange={(value) => { setRoute(value === all ? "" : value as SalesRoute); resetPages(); }}><SelectTrigger className="w-full sm:w-44" aria-label="Filter by sales route"><SelectValue /></SelectTrigger><SelectContent><SelectItem value={all}>All routes</SelectItem><SelectItem value="FIELDS_SALES">Field sales</SelectItem><SelectItem value="RESELLER">Reseller</SelectItem><SelectItem value="TELECOVERAGE">Telecoverage</SelectItem><SelectItem value="TELESALES">Telesales</SelectItem><SelectItem value="OTHER">Other</SelectItem></SelectContent></Select>
     </div>
     {isLoading && <p className="text-muted-foreground">Loading opportunities...</p>}
     {error && <p role="alert" className="text-destructive">Unable to load opportunities. Please try again.</p>}
@@ -66,7 +70,16 @@ export default function Opportunities() {
       <TabsContent value="board"><OpportunityKanbanBoard opportunities={opportunities} displayCurrency={displayCurrency} onEdit={editOpportunity} onStageDrop={handleStageDrop} movingId={transition.isPending ? transition.variables?.id : undefined} /></TabsContent>
       <TabsContent value="list"><OpportunityListView opportunities={opportunities} displayCurrency={displayCurrency} onEdit={editOpportunity} onChangeStage={(opportunity) => requestStageChange(opportunity)} /></TabsContent>
     </Tabs>}
-    {data && data.pagination.total > 0 && <TablePagination page={page} pageSize={pageSize} totalCount={data.pagination.total} totalPages={Math.max(1, Math.ceil(data.pagination.total / pageSize))} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />}
+    {data && data.pagination.total > 0 && (view === "list"
+      ? <TablePagination page={listPage} pageSize={listPageSize} totalCount={data.pagination.total} totalPages={Math.max(1, Math.ceil(data.pagination.total / listPageSize))} onPageChange={setListPage} onPageSizeChange={(size) => { setListPageSize(size); setListPage(1); }} />
+      : <nav aria-label="Board pages" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2 text-sm">
+          <span className="text-muted-foreground">Showing {(boardPage - 1) * 20 + 1}–{Math.min(boardPage * 20, data.pagination.total)} of {data.pagination.total} opportunities</span>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" disabled={boardPage <= 1} onClick={() => setBoardPage(boardPage - 1)}>Previous</Button>
+            <span className="tabular-nums">{boardPage} / {Math.max(1, Math.ceil(data.pagination.total / 20))}</span>
+            <Button variant="outline" size="sm" disabled={boardPage * 20 >= data.pagination.total} onClick={() => setBoardPage(boardPage + 1)}>Next</Button>
+          </div>
+        </nav>)}
     <OpportunityDialog open={dialogOpen} onOpenChange={setDialogOpen} opportunity={editingOpportunity} />
     <OpportunityStageDialog opportunity={stageChange?.opportunity ?? null} initialStage={stageChange?.initialStage} open={!!stageChange} onOpenChange={(open) => !open && setStageChange(null)} onSubmit={changeStage} pending={transition.isPending} error={transition.error} />
   </section>;

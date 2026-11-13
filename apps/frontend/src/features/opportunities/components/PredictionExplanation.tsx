@@ -34,7 +34,7 @@ function revenueDescription(
   kesPerUsd: number,
 ) {
   const bands: Record<string, string> = {
-    "0": "No qualifying sales in the previous two years",
+    "0": "Verified no qualifying sales in the previous two years",
     "1": `${formatMoney(1, "USD", currency, kesPerUsd)} to under ${formatMoney(50_000, "USD", currency, kesPerUsd)}`,
     "2": `${formatMoney(50_000, "USD", currency, kesPerUsd)} to under ${formatMoney(400_000, "USD", currency, kesPerUsd)}`,
     "3": `${formatMoney(400_000, "USD", currency, kesPerUsd)} to under ${formatMoney(1_500_000, "USD", currency, kesPerUsd)}`,

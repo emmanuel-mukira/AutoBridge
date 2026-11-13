@@ -47,19 +47,19 @@ const fifty = predictionReliability(
 assert.equal(fifty.atLeast70.count, 50);
 assert.equal(fifty.atLeast70.won, 35);
 assert.equal(fifty.atLeast70.observedWinRate, 0.7);
-assert.equal(result.eligible, 4);
-assert.equal(result.atLeast70.count, 2);
-assert.equal(result.atLeast70.won, 1);
+assert.equal(result.eligible, 5);
+assert.equal(result.atLeast70.count, 3);
+assert.equal(result.atLeast70.won, 2);
 assert.equal(result.atLeast70.lost, 1);
-assert.equal(result.atLeast70.observedWinRate, 0.5);
-assert.equal(result.atLeast70.meanPrediction, 0.85);
+assert.equal(result.atLeast70.observedWinRate, 2 / 3);
+assert.ok(Math.abs(result.atLeast70.meanPrediction - (0.7 + 1 + 0.9) / 3) < 1e-12);
 assert.equal(result.bins[0].count, 1);
 assert.equal(result.bins[6].count, 1);
 assert.equal(result.bins[7].count, 1);
-assert.equal(result.bins[9].count, 1);
+assert.equal(result.bins[9].count, 2);
 assert.equal(
   result.bins.reduce((sum, bin) => sum + bin.count, 0),
-  4,
+  5,
 );
 assert.equal(
   predictionReliability([], "automotive_v1").atLeast70.observedWinRate,
@@ -120,8 +120,10 @@ try {
     body.evaluation.metrics.map((metric) => metric.value),
     [0.81441, 0.60221, 0.13079],
   );
-  assert.equal(body.reliability.atLeast70.won, 1);
-  assert.equal(body.reliability.atLeast70.count, 2);
+  assert.equal(body.reliability.atLeast70.won, 2);
+  assert.equal(body.reliability.atLeast70.count, 3);
+  assert.equal(body.reliability.bins[9].won, 1);
+  assert.equal(body.reliability.bins[9].lost, 1);
   assert.equal(body.demonstrationReliability.eligible, 1000);
   assert.equal(body.demonstrationReliability.atLeast70.count, 60);
   assert.equal(body.demonstrationReliability.atLeast70.won, 50);
@@ -131,7 +133,7 @@ try {
   );
   assert.ok(body.demonstrationReliability.bins.every((bin) => bin.count > 0));
   console.log(
-    "PASS: frozen metrics, admin route, 401/403, latest pre-outcome selection, version/variant exclusion, empty and boundary bins, >=70% cohort",
+    "PASS: frozen metrics, admin route, 401/403, latest pre-outcome selection, both model variants, empty and boundary bins, >=70% cohort",
   );
 } finally {
   server.closeAllConnections();

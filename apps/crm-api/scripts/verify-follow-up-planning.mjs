@@ -58,5 +58,9 @@ for (const capacity of [0, 120, 240, 480, 900, 1200]) {
 }
 assert.deepEqual(optimizeWeekly(candidates, 90).optimal.ids, [2, 3]);
 assert.ok(optimizeWeekly([...candidates, candidate(4, 14, 0.95, 100, 30)], 90).optimal.ids.includes(4));
-assert.throws(() => optimizeWeekly([candidates[0], { ...candidates[1], opportunityId: 11 }], 120), /INVALID_CANDIDATES/);
+const sameOpportunity = [candidate(7, 11, 0.9, 100, 60), candidate(8, 11, 0.9, 100, 30), candidate(9, 12, 0.7, 100, 30)];
+const grouped = optimizeWeekly(sameOpportunity, 60);
+assert.deepEqual(grouped.optimal.ids, [8, 9]);
+assert.ok(grouped.baselines.every((row) => new Set(row.ids.map((id) => sameOpportunity.find((item) => item.id === id).opportunityId)).size === row.ids.length));
+assert.throws(() => optimizeWeekly([candidates[0], { ...candidates[1], id: 1 }], 120), /INVALID_CANDIDATES/);
 console.log("Follow-up accounting, completion-week attribution, all-pending eligibility and knapsack checks passed");

@@ -94,9 +94,11 @@ try {
   created.followUps.push(followUp.data.id);
   assert.equal(followUp.data.ownerId, rep.user.id);
   assert.equal(followUp.data.channel, "EMAIL");
+  assert.equal(followUp.data.estimatedMinutes, 15);
   assert.equal((await request(`/api/follow-ups/${followUp.data.id}`, "GET", undefined, otherRep)).response.status, 404);
   const rescheduledAt = new Date(Date.now() + 172_800_000).toISOString();
   const rescheduled = await request(`/api/follow-ups/${followUp.data.id}`, "PATCH", { dueAt: rescheduledAt, title: "Confirm revised quote", channel: "CALL" }, rep);
+  assert.equal(rescheduled.data.estimatedMinutes, 30);
   assert.equal(rescheduled.response.status, 200);
   assert.equal(rescheduled.data.title, "Confirm revised quote");
   assert.equal(rescheduled.data.channel, "CALL");
@@ -106,7 +108,7 @@ try {
   const completedAgain = await request(`/api/follow-ups/${followUp.data.id}/complete`, "PATCH", {}, rep);
   assert.equal(completedAgain.data.completedAt, completed.data.completedAt);
   assert.equal((await request(`/api/follow-ups?completed=true&clientId=${clientResult.data.id}`, "GET", undefined, rep)).data.followUps.length, 1);
-  assert.ok((await request("/api/follow-ups", "GET", undefined, admin)).data.followUps.some((item) => item.id === followUp.data.id));
+  assert.ok((await request(`/api/follow-ups?clientId=${clientResult.data.id}`, "GET", undefined, admin)).data.followUps.some((item) => item.id === followUp.data.id));
 
   assert.ok(await prisma.interaction.findUnique({ where: { id: interaction.data.id } }));
   assert.ok((await prisma.followUp.findUnique({ where: { id: followUp.data.id } }))?.completedAt);

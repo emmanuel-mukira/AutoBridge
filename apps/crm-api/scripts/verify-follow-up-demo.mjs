@@ -49,13 +49,25 @@ try {
     const normal = opportunities.filter((item) => !missing.includes(item) && !stale.includes(item));
     assert.ok(normal.every((item) => item.predictions[0]?.modelVersion === "automotive_v1" &&
       item.predictions[0]?.explanation?.status === "available"));
+    for (const opportunity of normal) {
+      const prediction = opportunity.predictions[0];
+      const evidence = prediction.inputSnapshot.revenueEvidence;
+      assert.equal(prediction.modelVariant, evidence.state === "UNKNOWN" ? "LIMITED_HISTORY" : "PRIMARY");
+      assert.equal("Revenue From Client Past Two Years" in prediction.inputSnapshot.modelReadyFeatures,
+        prediction.modelVariant === "PRIMARY");
+    }
     const plan = await allocation.plan({ id: rep.id, role: "SALES_REP" }, weekStart);
     assert.ok(plan.completedMinutes >= 90 && plan.pendingMinutes >= 180);
     const demoCandidates = plan.candidates.filter((item) => item.title.startsWith("Demo:"));
     assert.ok(demoCandidates.every((item) => normal.some((opportunity) => opportunity.id === item.opportunityId)));
-    assert.equal(new Set(plan.candidates.map((item) => item.opportunityId)).size, plan.candidates.length);
-    assert.ok(plan.excluded.some((item) => item.id === missing[0].id && item.reason === "Missing prediction"));
-    assert.ok(plan.excluded.some((item) => item.id === stale[0].id && item.reason === "Stale prediction"));
+    assert.equal(new Set(plan.candidates.map((item) => item.id)).size, plan.candidates.length);
+    assert.equal(new Set(plan.recommended.map((item) => item.opportunityId)).size, plan.recommended.length);
+    assert.ok(plan.recommended.every((item) => item.dueAt >= plan.generatedAt));
+    for (const [opportunity, reason] of [[missing[0], "Missing prediction"], [stale[0], "Stale prediction"]]) {
+      assert.ok(plan.excluded.some((item) => item.id === opportunity.id && item.reason === reason) ||
+        plan.otherPending.some((item) => item.opportunityId === opportunity.id && new Date(item.dueAt) < new Date(plan.generatedAt)) ||
+        plan.completed.some((item) => item.opportunityId === opportunity.id));
+    }
     assert.ok(plan.withoutFollowUps.some((item) => item.id === noAction[0].id));
     const budgets = [];
     for (const budgetHours of [2, 4, 8, 15, 20]) {

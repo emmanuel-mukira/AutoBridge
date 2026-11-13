@@ -33,8 +33,7 @@ function validate(candidates: PlanningCandidate[], capacityMinutes: number) {
     throw new Error("INVALID_CAPACITY");
   if (
     candidates.length > 200 ||
-    new Set(candidates.map((item) => item.id)).size !== candidates.length ||
-    new Set(candidates.map((item) => item.opportunityId)).size !== candidates.length
+    new Set(candidates.map((item) => item.id)).size !== candidates.length
   )
     throw new Error("INVALID_CANDIDATES");
   for (const item of candidates) {
@@ -95,37 +94,42 @@ export function optimizeWeekly(
   validate(candidates, capacityMinutes);
   const ordered = [...candidates].sort((a, b) => a.id - b.id);
   const slots = capacityMinutes / 15;
-  type Cell = { value: Prisma.Decimal; used: number; take: boolean };
+  const groups = new Map<number, PlanningCandidate[]>();
+  for (const item of ordered) groups.set(item.opportunityId, [...(groups.get(item.opportunityId) ?? []), item]);
+  type Cell = { value: Prisma.Decimal; used: number; choiceId: number | null };
   const rows: Cell[][] = [
     Array.from({ length: slots + 1 }, () => ({
       value: zero,
       used: 0,
-      take: false,
+      choiceId: null,
     })),
   ];
-  for (const item of ordered) {
+  for (const group of groups.values()) {
     const previous = rows[rows.length - 1];
-    const cost = item.effortMinutes / 15;
-    const value = new Prisma.Decimal(item.expectedValueUsd);
     const next = previous.map((skip, capacity) => {
-      if (cost > capacity) return { ...skip, take: false };
-      const base = previous[capacity - cost];
-      const takenValue = base.value.plus(value);
-      const takenMinutes = base.used + item.effortMinutes;
-      const comparison = takenValue.comparedTo(skip.value);
-      return comparison > 0 || (comparison === 0 && takenMinutes < skip.used)
-        ? { value: takenValue, used: takenMinutes, take: true }
-        : { ...skip, take: false };
+      let best = { ...skip, choiceId: null as number | null };
+      for (const item of group) {
+        const cost = item.effortMinutes / 15;
+        if (cost > capacity) continue;
+        const base = previous[capacity - cost];
+        const takenValue = base.value.plus(item.expectedValueUsd);
+        const takenMinutes = base.used + item.effortMinutes;
+        const comparison = takenValue.comparedTo(best.value);
+        if (comparison > 0 || (comparison === 0 && takenMinutes < best.used))
+          best = { value: takenValue, used: takenMinutes, choiceId: item.id };
+      }
+      return best;
     });
     rows.push(next);
   }
   const ids: number[] = [];
+  const byId = new Map(ordered.map((item) => [item.id, item]));
   let capacity = slots;
-  for (let index = ordered.length; index > 0; index -= 1) {
-    if (rows[index][capacity].take) {
-      const item = ordered[index - 1];
-      ids.push(item.id);
-      capacity -= item.effortMinutes / 15;
+  for (let index = groups.size; index > 0; index -= 1) {
+    const choiceId = rows[index][capacity].choiceId;
+    if (choiceId !== null) {
+      ids.push(choiceId);
+      capacity -= byId.get(choiceId)!.effortMinutes / 15;
     }
   }
   const optimal = summary(ids, ordered, capacityMinutes);
@@ -144,9 +148,11 @@ export function optimizeWeekly(
       });
       let remaining = capacityMinutes;
       const greedyIds: number[] = [];
+      const selectedOpportunities = new Set<number>();
       for (const item of sorted)
-        if (item.effortMinutes <= remaining) {
+        if (!selectedOpportunities.has(item.opportunityId) && item.effortMinutes <= remaining) {
           greedyIds.push(item.id);
+          selectedOpportunities.add(item.opportunityId);
           remaining -= item.effortMinutes;
         }
       const result = summary(greedyIds, ordered, capacityMinutes);
