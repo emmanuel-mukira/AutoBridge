@@ -1,0 +1,103 @@
+{
+  "modelVersion": "automotive_v1",
+  "modelSha256": "5c2adb26077b6813532a0ca6b050bdbb2319611f26dfcc910bd54f265fb34cc7",
+  "datasetSha256": "31afdb83aa46b54f62f5cdbfe1ccf00f395266254a0249c96ceef8522cc12b24",
+  "sourceReplaySha256": "03f5a78a086c62b06091c9d621c03692826994d70bf4ee44075951c9cf5214d6",
+  "source": "IBM validation replay · 1,000 sampled opportunities · frozen primary model",
+  "partition": "Validation",
+  "sampling": "Simple random sample, seed 42, selected without using outcomes or prediction values",
+  "explanation": "Probabilities were computed by the saved Automotive v1 model from the five original inputs. Won/Lost labels are copied from the IBM dataset.",
+  "warning": "Dataset replay for demonstration, not new sales or independent validation. IBM provides no opportunity dates or client identities; no CRM history was invented.",
+  "reliability": {
+    "eligible": 1000,
+    "bins": [
+      {
+        "label": "0–10%",
+        "count": 352,
+        "won": 22,
+        "lost": 330,
+        "meanPrediction": 0.05858131758891652,
+        "observedWinRate": 0.0625
+      },
+      {
+        "label": "10–20%",
+        "count": 277,
+        "won": 32,
+        "lost": 245,
+        "meanPrediction": 0.144229076519003,
+        "observedWinRate": 0.11552346570397112
+      },
+      {
+        "label": "20–30%",
+        "count": 116,
+        "won": 41,
+        "lost": 75,
+        "meanPrediction": 0.24541430529642874,
+        "observedWinRate": 0.35344827586206895
+      },
+      {
+        "label": "30–40%",
+        "count": 81,
+        "won": 27,
+        "lost": 54,
+        "meanPrediction": 0.35725418228810174,
+        "observedWinRate": 0.3333333333333333
+      },
+      {
+        "label": "40–50%",
+        "count": 69,
+        "won": 32,
+        "lost": 37,
+        "meanPrediction": 0.45332148415698265,
+        "observedWinRate": 0.463768115942029
+      },
+      {
+        "label": "50–60%",
+        "count": 27,
+        "won": 13,
+        "lost": 14,
+        "meanPrediction": 0.5335463443803306,
+        "observedWinRate": 0.48148148148148145
+      },
+      {
+        "label": "60–70%",
+        "count": 18,
+        "won": 12,
+        "lost": 6,
+        "meanPrediction": 0.6456058316982465,
+        "observedWinRate": 0.6666666666666666
+      },
+      {
+        "label": "70–80%",
+        "count": 25,
+        "won": 17,
+        "lost": 8,
+        "meanPrediction": 0.7442164850900893,
+        "observedWinRate": 0.68
+      },
+      {
+        "label": "80–90%",
+        "count": 28,
+        "won": 26,
+        "lost": 2,
+        "meanPrediction": 0.8437662625767599,
+        "observedWinRate": 0.9285714285714286
+      },
+      {
+        "label": "90–100%",
+        "count": 7,
+        "won": 7,
+        "lost": 0,
+        "meanPrediction": 0.9186238882053315,
+        "observedWinRate": 1
+      }
+    ],
+    "atLeast70": {
+      "count": 60,
+      "won": 50,
+      "lost": 10,
+      "meanPrediction": 0.811020578280647,
+      "observedWinRate": 0.8333333333333334
+    }
+  }
+}

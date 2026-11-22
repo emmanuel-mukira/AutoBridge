@@ -1,13 +1,15 @@
 .venv/
 __pycache__/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 *.py[cod]
 .vscode/
+.DS_Store
 CONTEXT.md
 /FUTURE_MODEL_PERFORMANCE.md
 /next prompt.md
 /quickstart-commands.md
-/DEPLOYMENT_PLAN.md
 
 # Local Node artifacts and credentials
 node_modules/
@@ -16,9 +18,20 @@ dist-ssr/
 build/
 .cache/
 .vite/
+coverage/
+.coverage
 *.tsbuildinfo
 *.log
 logs/
+*.tmp
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+/tmp/
+/temp/
 .env
 .env.*
 !.env.example
@@ -32,7 +45,14 @@ logs/
 
 # Local documentation and CRM demonstration data.
 /docs/
-/apps/crm-api/data/
+/apps/crm-api/data/*
+!/apps/crm-api/data/ibm-reliability-summary.json
 /graphify-out/
+archive/
+*plan*.md
+*Plan*.md
+*PLAN*.md
 
 .playwright-mcp
+
+/notebooks/maven_evaluation_summary.json
