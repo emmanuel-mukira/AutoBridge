@@ -69,7 +69,23 @@ export function useSaveQuotation(opportunityId: number) {
       client.invalidateQueries({ queryKey: keys.opportunity(opportunityId) });
       client.invalidateQueries({ queryKey: ["quotations"] });
       client.invalidateQueries({ queryKey: ["opportunities"] });
+      client.invalidateQueries({ queryKey: ["weekly-allocation"] });
       toast.success("Quotation draft saved");
+    },
+    onError: (error) => toast.error(error.message),
+  });
+}
+
+export function useCreateQuotation(opportunityId: number) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: QuotationDraftInput) => quotationsApi.create(opportunityId, input),
+    onSuccess: () => {
+      client.invalidateQueries({ queryKey: keys.opportunity(opportunityId) });
+      client.invalidateQueries({ queryKey: ["quotations"] });
+      client.invalidateQueries({ queryKey: ["opportunities"] });
+      toast.success("Quotation draft created");
+      client.invalidateQueries({ queryKey: ["weekly-allocation"] });
     },
     onError: (error) => toast.error(error.message),
   });
@@ -90,6 +106,7 @@ export function useUpdateQuotationStatus(opportunityId: number) {
       client.invalidateQueries({ queryKey: ["quotations"] });
       client.invalidateQueries({ queryKey: ["opportunities"] });
       toast.success(`Quotation marked ${quotation.status.toLowerCase()}`);
+      client.invalidateQueries({ queryKey: ["weekly-allocation"] });
     },
     onError: (error) => toast.error(error.message),
   });

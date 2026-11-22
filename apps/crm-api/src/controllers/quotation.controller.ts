@@ -3,6 +3,8 @@ import {
   ListQuotationSeriesSchema,
   ListQuotationsSchema,
   QuotationIdSchema,
+  OpportunityQuotationParamsSchema,
+  CreateQuotationSchema,
   QuotationStatusSchema,
   UpdateQuotationSchema,
 } from "../schemas/quotation.schemas.js";
@@ -55,6 +57,7 @@ function quotationError(error: unknown, res: Response): boolean {
       status: 409,
       message: "Finish the existing draft revision before creating another",
     },
+    QUOTATION_ALREADY_EXISTS: { status: 409, message: "This opportunity already has a quotation; edit or revise it" },
     PRINCIPAL_SUBGROUP_NOT_SELECTED: {
       status: 400,
       message:
@@ -70,6 +73,18 @@ function quotationError(error: unknown, res: Response): boolean {
   if (!detail) return false;
   res.status(detail.status).json({ error: detail.message });
   return true;
+}
+
+export async function create(req: Request, res: Response, next: NextFunction) {
+  const params = OpportunityQuotationParamsSchema.safeParse(req.params);
+  const body = CreateQuotationSchema.safeParse(req.body);
+  if (!params.success || !body.success)
+    return void res.status(400).json({ error: "Invalid quotation details" });
+  try {
+    res.status(201).json(await service.create(req.user!, params.data.id, body.data));
+  } catch (error) {
+    if (!quotationError(error, res)) next(error);
+  }
 }
 
 export async function list(req: Request, res: Response, next: NextFunction) {

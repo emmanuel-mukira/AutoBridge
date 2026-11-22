@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useContacts } from "@/features/clients/hooks/useContacts";
-import { useCatalogueProducts, useSaveQuotation } from "../hooks/useQuotations";
+import { useCatalogueProducts, useCreateQuotation, useSaveQuotation } from "../hooks/useQuotations";
 import type { CatalogueProduct, Quotation } from "../services/quotationsApi";
 
 type DraftLine = { product: CatalogueProduct; quantity: string };
@@ -60,6 +60,8 @@ export function QuotationDialog({
   const products = useCatalogueProducts(search);
   const contacts = useContacts(clientId);
   const save = useSaveQuotation(opportunityId);
+  const create = useCreateQuotation(opportunityId);
+  const pending = save.isPending || create.isPending;
 
   useEffect(() => {
     if (!open) return;
@@ -121,11 +123,9 @@ export function QuotationDialog({
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!lines.length || !quotation) return;
+    if (!lines.length) return;
     try {
-      await save.mutateAsync({
-        id: quotation.id,
-        input: {
+      const input = {
           contactId: contactId === "none" ? null : Number(contactId),
           validUntil: new Date(`${validUntil}T23:59:59.999Z`).toISOString(),
           discountPercent,
@@ -135,8 +135,9 @@ export function QuotationDialog({
             productId: line.product.id,
             quantity: line.quantity,
           })),
-        },
-      });
+      };
+      if (quotation) await save.mutateAsync({ id: quotation.id, input });
+      else await create.mutateAsync(input);
       onOpenChange(false);
     } catch {
       /* toast and inline error handle this */
@@ -146,7 +147,7 @@ export function QuotationDialog({
   return (
     <Dialog
       open={open}
-      onOpenChange={(next) => !save.isPending && onOpenChange(next)}
+      onOpenChange={(next) => !pending && onOpenChange(next)}
     >
       <DialogContent className="sm:max-w-5xl">
         <form onSubmit={submit} className="space-y-6">
@@ -154,7 +155,7 @@ export function QuotationDialog({
             <DialogTitle>
               {quotation
                 ? `Edit ${quotation.quoteNumber} · Version ${quotation.version}`
-                : "Edit quotation"}
+                : "Create quotation"}
             </DialogTitle>
             <DialogDescription>
               Change quantities or apply a negotiated percentage discount.
@@ -307,19 +308,20 @@ export function QuotationDialog({
                           <Input
                             id={`quantity-${line.product.id}`}
                             type="number"
-                            min="0.001"
-                            step="0.001"
+                            min="1"
+                            step="1"
                             required
                             value={line.quantity}
-                            onChange={(event) =>
+                            onChange={(event) => {
+                              if (!/^\d*$/.test(event.target.value)) return;
                               setLines((current) =>
                                 current.map((item, itemIndex) =>
                                   itemIndex === index
                                     ? { ...item, quantity: event.target.value }
                                     : item,
                                 ),
-                              )
-                            }
+                              );
+                            }}
                           />
                         </div>
                       </div>
@@ -378,9 +380,9 @@ export function QuotationDialog({
               />
             </div>
           </div>
-          {save.error && (
+          {(save.error || create.error) && (
             <p role="alert" className="text-sm text-destructive">
-              {save.error.message}
+              {(save.error || create.error)?.message}
             </p>
           )}
           <DialogFooter>
@@ -388,12 +390,12 @@ export function QuotationDialog({
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
-              disabled={save.isPending}
+              disabled={pending}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={save.isPending || !lines.length}>
-              {save.isPending ? "Saving..." : "Save draft"}
+            <Button type="submit" disabled={pending || !lines.length}>
+              {pending ? "Saving..." : "Save draft"}
             </Button>
           </DialogFooter>
         </form>

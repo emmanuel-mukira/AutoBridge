@@ -1,4 +1,5 @@
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useOpportunityQuotations } from "@/features/quotations/hooks/useQuotations";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -61,15 +62,19 @@ export function OpportunityStageDialog({
   const availableStages = useMemo(
     () =>
       opportunity ? stages.slice(stages.indexOf(opportunity.stage) + 1) : [],
-    [opportunity],
+    [opportunity?.stage],
   );
   const [stage, setStage] = useState<OpportunityStage | "">("");
   const [outcome, setOutcome] = useState<OpportunityOutcome | "">("");
   const [confirmedAmount, setConfirmedAmount] = useState("");
   const [confirmedCurrency, setConfirmedCurrency] = useState<Currency>("KES");
+  const amountEdited = useRef(false);
+  const quotations = useOpportunityQuotations(open ? opportunity?.id ?? 0 : 0);
+  const currentQuotation = quotations.data?.find((item) => item.current) ?? quotations.data?.[0];
 
   useEffect(() => {
     if (open) {
+      amountEdited.current = false;
       setStage(
         initialStage && availableStages.includes(initialStage)
           ? initialStage
@@ -89,6 +94,13 @@ export function OpportunityStageDialog({
     open,
     opportunity?.currency,
   ]);
+
+  useEffect(() => {
+    if (open && !initialConfirmedSale && !amountEdited.current && currentQuotation) {
+      setConfirmedAmount(currentQuotation.totalAmount);
+      setConfirmedCurrency(currentQuotation.currency);
+    }
+  }, [open, initialConfirmedSale, currentQuotation]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -172,7 +184,7 @@ export function OpportunityStageDialog({
                   inputMode="decimal"
                   placeholder="Actual agreed value"
                   value={confirmedAmount}
-                  onChange={(event) => setConfirmedAmount(event.target.value)}
+                  onChange={(event) => { amountEdited.current = true; setConfirmedAmount(event.target.value); }}
                   required
                 />
               </div>
@@ -194,8 +206,8 @@ export function OpportunityStageDialog({
                 </Select>
               </div>
               <p className="text-xs text-muted-foreground sm:col-span-2">
-                Confirm or edit the actual agreed sale value before marking the
-                opportunity Won.
+                {currentQuotation ? "Prefilled from the current quotation. " : ""}
+                Confirm or edit the actual agreed sale value before marking the opportunity Won.
               </p>
             </div>
           )}

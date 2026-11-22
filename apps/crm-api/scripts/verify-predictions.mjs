@@ -46,7 +46,7 @@ try {
   assert.ok(process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD && process.env.ML_API_URL && process.env.ML_API_TOKEN);
   assert.equal((await request("/api/opportunities/1/score", "POST")).response.status, 401);
   const admin = await signIn(process.env.ADMIN_EMAIL, process.env.ADMIN_PASSWORD);
-  const outsider = await signIn("samuel@autobridge.local", process.env.ADMIN_PASSWORD);
+  const outsider = await signIn("samuel@autobridge.com", process.env.ADMIN_PASSWORD);
   const products = await request("/api/opportunities/products", "GET", undefined, admin);
   const subgroup = products.data.productGroups.find((group) => group.name === "Car Accessories").subgroups.find((item) => item.name === "Replacement Parts");
   catalogueProduct = (await request(`/api/products?productSubgroupId=${subgroup.id}`, "GET", undefined, admin)).data.products[0];

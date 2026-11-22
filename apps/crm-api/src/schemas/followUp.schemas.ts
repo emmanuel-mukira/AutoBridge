@@ -1,13 +1,17 @@
 import { z } from "zod";
 import { InteractionTypeSchema } from "./interaction.schemas.js";
 
+const FollowUpChannelSchema = z.enum(["CALL", "EMAIL", "MEETING", "SITE_VISIT"]);
+
 export const CreateFollowUpSchema = z.object({
   clientId: z.number().int().positive(),
   opportunityId: z.number().int().positive(),
   ownerId: z.number().int().positive().optional(),
   title: z.string().trim().min(1).max(200),
-  channel: InteractionTypeSchema,
+  channel: FollowUpChannelSchema,
   dueAt: z.string().datetime(),
+  estimatedMinutes: z.number().int().min(15).max(4800).refine((value) => value % 15 === 0).nullable().optional(),
+  appointmentConfirmed: z.boolean().default(false),
 });
 
 export const UpdateFollowUpSchema = z.object({
@@ -15,6 +19,8 @@ export const UpdateFollowUpSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
   channel: InteractionTypeSchema.optional(),
   dueAt: z.string().datetime().optional(),
+  estimatedMinutes: z.number().int().min(15).max(4800).refine((value) => value % 15 === 0).nullable().optional(),
+  appointmentConfirmed: z.boolean().optional(),
 }).refine((value) => Object.keys(value).length > 0, "Provide at least one field");
 
 export const ListFollowUpsSchema = z.object({
@@ -31,6 +37,12 @@ export const ListFollowUpsSchema = z.object({
 });
 
 export const FollowUpIdSchema = z.object({ id: z.coerce.number().int().positive() });
+
+export const FollowUpAvailabilitySchema = z.object({
+  clientId: z.coerce.number().int().positive(),
+  start: z.string().datetime(),
+  end: z.string().datetime(),
+}).refine((value) => new Date(value.end).getTime() > new Date(value.start).getTime() && new Date(value.end).getTime() - new Date(value.start).getTime() <= 86_400_000, "Select one day");
 
 export type CreateFollowUpInput = z.infer<typeof CreateFollowUpSchema>;
 export type UpdateFollowUpInput = z.infer<typeof UpdateFollowUpSchema>;

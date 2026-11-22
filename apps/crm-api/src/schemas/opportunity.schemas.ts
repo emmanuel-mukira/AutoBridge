@@ -18,10 +18,7 @@ const QuantitySchema = z
   .pipe(
     z
       .string()
-      .regex(
-        /^(?!0+(\.0{1,3})?$)(0|[1-9]\d{0,8})(\.\d{1,3})?$/,
-        "Use a positive quantity with at most three decimal places",
-      ),
+      .regex(/^[1-9]\d{0,8}$/, "Use a positive whole-number quantity"),
   );
 const OpportunityItemSchema = z
   .object({

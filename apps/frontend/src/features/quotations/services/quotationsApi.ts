@@ -165,6 +165,8 @@ export interface QuotationSeriesResponse {
 }
 
 export const quotationsApi = {
+  create: async (opportunityId: number, input: QuotationDraftInput) =>
+    (await http.post<Quotation>(`/api/opportunities/${opportunityId}/quotations`, input)).data,
   products: async (
     filters: {
       search?: string;

@@ -27,7 +27,7 @@ export function predictionReliability(
     if (
       !prediction ||
       prediction.modelVersion !== modelVersion ||
-      prediction.modelVariant !== "PRIMARY"
+      !["PRIMARY", "LIMITED_HISTORY"].includes(prediction.modelVariant)
     )
       continue;
     const probability = Number(prediction.wonProbability.toString());

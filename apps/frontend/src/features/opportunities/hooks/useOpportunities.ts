@@ -53,6 +53,7 @@ export function useScoreOpportunity() {
       });
       client.invalidateQueries({ queryKey: keys.all });
       client.invalidateQueries({ queryKey: ["analytics", "decision-support"] });
+      client.invalidateQueries({ queryKey: ["weekly-allocation"] });
       toast.success(prediction.message ?? (prediction.reused ? "The current win probability is already up to date" : "Win probability generated"));
     },
     onError: (error) => toast.error(error.message),
@@ -96,6 +97,7 @@ export function useSaveOpportunity() {
         : opportunitiesApi.create(request.input),
     onSuccess: (opportunity) => {
       client.invalidateQueries({ queryKey: keys.all });
+      client.invalidateQueries({ queryKey: ["weekly-allocation"] });
       client.setQueryData(keys.detail(opportunity.id), opportunity);
     },
   });
@@ -117,6 +119,7 @@ export function useTransitionOpportunity() {
     }) => opportunitiesApi.transition(id, stage, outcome, confirmedSale),
     onSuccess: (opportunity) => {
       client.invalidateQueries({ queryKey: keys.all });
+      client.invalidateQueries({ queryKey: ["weekly-allocation"] });
       client.setQueryData(keys.detail(opportunity.id), opportunity);
       toast.success(
         `Moved to ${opportunity.stage.toLowerCase().replace("_", " ")}`,
@@ -136,6 +139,7 @@ export function useCorrectConfirmedSale() {
       client.invalidateQueries({
         queryKey: ["clients", opportunity.clientId, "sales-history"],
       });
+      client.invalidateQueries({ queryKey: ["weekly-allocation"] });
       client.setQueryData(keys.detail(opportunity.id), opportunity);
       toast.success("Confirmed sale value updated");
     },

@@ -1,36 +1,49 @@
 import "dotenv/config";
+import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
+import { lstat, open, readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import bcrypt from "bcryptjs";
-import { Prisma } from "@prisma/client";
+import { parse } from "dotenv";
+import { Prisma, type Opportunity, type OpportunityPrediction } from "@prisma/client";
 import { prisma } from "../../src/client.js";
 import {
   convertMoneyToUsd,
   ILLUSTRATIVE_USD_KES_RATE,
 } from "../../src/domain/currency.js";
+import { OpportunityScoringService } from "../../src/services/opportunityScoringService.js";
+import { OpportunityService } from "../../src/services/opportunityService.js";
+import { WeeklyAllocationService } from "../../src/services/weeklyAllocationService.js";
+import { optimizeWeekly } from "../../src/services/weeklyOptimization.js";
 
 const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
-const password = process.env.ADMIN_PASSWORD;
+const developmentPassword = process.env.ADMIN_PASSWORD;
 const firstName = process.env.ADMIN_FIRST_NAME?.trim();
 const lastName = process.env.ADMIN_LAST_NAME?.trim();
 const databaseUrl = process.env.DATABASE_URL_ADMIN;
 
-if (process.env.NODE_ENV !== "development")
-  throw new Error("Development seed requires NODE_ENV=development");
-if (
-  !databaseUrl ||
-  !["localhost", "127.0.0.1"].includes(new URL(databaseUrl).hostname)
-) {
-  throw new Error("Development seed requires a local PostgreSQL connection");
-}
+const mode = process.argv[2] ?? "development";
+if (!["development", "production", "demo", "verify"].includes(mode))
+  throw new Error("Usage: seed.ts [development|production|demo|verify]");
+if (!databaseUrl) throw new Error("DATABASE_URL_ADMIN is required");
+const target = new URL(databaseUrl);
+const local = ["localhost", "127.0.0.1"].includes(target.hostname);
+const databaseName = decodeURIComponent(target.pathname.slice(1));
+if (mode === "development" && (process.env.NODE_ENV !== "development" || !local))
+  throw new Error("Development seed requires NODE_ENV=development and local PostgreSQL");
+if (mode !== "development" && mode !== "verify" && process.env.SEED_CONFIRM_DATABASE !== databaseName)
+  throw new Error("Set SEED_CONFIRM_DATABASE to the exact target database name before initialization");
+if (mode === "demo" && !local && process.env.SEED_CONFIRM_REMOTE_DEMO !== target.hostname)
+  throw new Error("Set SEED_CONFIRM_REMOTE_DEMO to the exact remote database hostname for demonstration data");
 if (
   !email ||
   !/^\S+@\S+\.\S+$/.test(email) ||
-  !password ||
-  password.length < 6 ||
+  (mode === "development" && (!developmentPassword || developmentPassword.length < 6)) ||
   !firstName ||
   !lastName
 ) {
   throw new Error(
-    "Set ADMIN_EMAIL, ADMIN_PASSWORD (6+ characters), ADMIN_FIRST_NAME and ADMIN_LAST_NAME in the API .env",
+    "Set ADMIN_EMAIL, ADMIN_FIRST_NAME, ADMIN_LAST_NAME and, for development, ADMIN_PASSWORD (6+ characters)",
   );
 }
 
@@ -383,16 +396,17 @@ const catalogueProducts = [
   },
 ] as const;
 
-try {
-  let admin = await prisma.user.findUnique({ where: { email } });
+async function seedBase(db: Prisma.TransactionClient, passwords: [string, string, string], essentialsOnly: boolean) {
+  const password = passwords[0];
+  let admin = await db.user.findUnique({ where: { email } });
   if (!admin) {
-    const admins = await prisma.user.findMany({
+    const admins = await db.user.findMany({
       where: { role: "ADMIN" },
       take: 2,
     });
     if (
       admins.length > 1 ||
-      (admins.length === 0 && (await prisma.user.count()) > 0)
+      (admins.length === 0 && (await db.user.count()) > 0)
     ) {
       throw new Error(
         "Cannot identify a unique development administrator; seed stopped without changing users",
@@ -400,12 +414,13 @@ try {
     }
     admin =
       admins[0] ??
-      (await prisma.user.create({
+      (await db.user.create({
         data: {
-          email,
-          firstName,
-          lastName,
+          email: email!,
+          firstName: firstName!,
+          lastName: lastName!,
           passwordHash: await bcrypt.hash(password, 12),
+          mustChangePassword: mode !== "development",
           role: "ADMIN",
           approvedAt: new Date(),
         },
@@ -413,7 +428,7 @@ try {
   }
   if (admin.role !== "ADMIN")
     throw new Error("ADMIN_EMAIL belongs to a non-admin user");
-  const passwordChanged = !(await bcrypt.compare(password, admin.passwordHash));
+  const passwordChanged = mode === "development" && !(await bcrypt.compare(password, admin.passwordHash));
   if (
     admin.email !== email ||
     admin.firstName !== firstName ||
@@ -421,7 +436,7 @@ try {
     passwordChanged ||
     !admin.active
   ) {
-    admin = await prisma.user.update({
+    admin = await db.user.update({
       where: { id: admin.id },
       data: {
         email,
@@ -429,7 +444,7 @@ try {
         lastName,
         active: true,
         approvedAt: admin.approvedAt ?? new Date(),
-        mustChangePassword: false,
+        ...(mode === "development" ? { mustChangePassword: false } : {}),
         ...(passwordChanged
           ? { passwordHash: await bcrypt.hash(password, 12) }
           : {}),
@@ -447,12 +462,12 @@ try {
     });
   }
 
-  async function ensureSalesRep(targetEmail: string, legacyEmail: string, repFirstName: string, repLastName: string) {
-    const existing = await prisma.user.findFirst({ where: { email: { in: [targetEmail, legacyEmail] } } });
+  async function ensureSalesRep(targetEmail: string, legacyEmails: string[], repFirstName: string, repLastName: string, repPassword: string) {
+    const existing = await db.user.findFirst({ where: { email: { in: [targetEmail, ...legacyEmails] } } });
     if (existing && existing.role !== "SALES_REP") throw new Error(`${targetEmail} belongs to a non-sales user`);
-    if (!existing) return prisma.user.create({ data: { email: targetEmail, firstName: repFirstName, lastName: repLastName, passwordHash: await bcrypt.hash(password, 12), role: "SALES_REP", approvedAt: new Date() } });
-    const passwordChanged = !(await bcrypt.compare(password, existing.passwordHash));
-    return prisma.user.update({
+    if (!existing) return db.user.create({ data: { email: targetEmail, firstName: repFirstName, lastName: repLastName, passwordHash: await bcrypt.hash(repPassword, 12), role: "SALES_REP", approvedAt: new Date(), mustChangePassword: mode !== "development" } });
+    const passwordChanged = mode === "development" && !(await bcrypt.compare(repPassword, existing.passwordHash));
+    return db.user.update({
       where: { id: existing.id },
       data: {
         email: targetEmail,
@@ -460,34 +475,34 @@ try {
         lastName: repLastName,
         active: true,
         approvedAt: existing.approvedAt ?? new Date(),
-        mustChangePassword: false,
-        ...(passwordChanged ? { passwordHash: await bcrypt.hash(password, 12), sessions: { updateMany: { where: { revokedAt: null }, data: { revokedAt: new Date() } } } } : {}),
+        ...(mode === "development" ? { mustChangePassword: false } : {}),
+        ...(passwordChanged ? { passwordHash: await bcrypt.hash(repPassword, 12), sessions: { updateMany: { where: { revokedAt: null }, data: { revokedAt: new Date() } } } } : {}),
       },
     });
   }
-  const firstRep = await ensureSalesRep("samuel@autobridge.local", "samuel.sales@autobridge.test", "Samuel", "Kamau");
-  const secondRep = await ensureSalesRep("grace@autobridge.local", "grace.sales@autobridge.test", "Grace", "Achieng");
+  const firstRep = await ensureSalesRep("samuel@autobridge.com", ["samuel@autobridge.local", "samuel.sales@autobridge.test"], "Samuel", "Kamau", passwords[1]);
+  const secondRep = await ensureSalesRep("grace@autobridge.com", ["grace@autobridge.local", "grace.sales@autobridge.test"], "Grace", "Achieng", passwords[2]);
 
-  for (const [index, client] of clients.entries()) {
+  if (!essentialsOnly) for (const [index, client] of clients.entries()) {
     const ownerId = index % 2 === 0 ? firstRep.id : secondRep.id;
-    const exists = await prisma.client.findFirst({
+    const exists = await db.client.findFirst({
       where: { businessName: client.businessName },
     });
     if (exists)
-      await prisma.client.update({
+      await db.client.update({
         where: { id: exists.id },
         data: { ownerId },
       });
-    else await prisma.client.create({ data: { ...client, ownerId } });
+    else await db.client.create({ data: { ...client, ownerId } });
   }
   for (const [name, subgroups] of Object.entries(productGroups)) {
-    const group = await prisma.productGroup.upsert({
+    const group = await db.productGroup.upsert({
       where: { name },
       update: {},
       create: { name },
     });
     for (const subgroupName of subgroups) {
-      await prisma.productSubgroup.upsert({
+      await db.productSubgroup.upsert({
         where: {
           productGroupId_name: { productGroupId: group.id, name: subgroupName },
         },
@@ -499,7 +514,7 @@ try {
 
   const seededClients = new Map(
     (
-      await prisma.client.findMany({
+      await db.client.findMany({
         where: {
           businessName: { in: clients.map((client) => client.businessName) },
         },
@@ -507,14 +522,14 @@ try {
     ).map((client) => [client.businessName, client]),
   );
   const subgroupByName = new Map(
-    (await prisma.productSubgroup.findMany()).map((subgroup) => [
+    (await db.productSubgroup.findMany()).map((subgroup) => [
       subgroup.name,
       subgroup,
     ]),
   );
 
   for (const product of catalogueProducts) {
-    await prisma.product.upsert({
+    await db.product.upsert({
       where: { sku: product.sku },
       update: {},
       create: {
@@ -534,6 +549,8 @@ try {
       },
     });
   }
+
+  if (essentialsOnly) return;
 
   const contactData = [
     {
@@ -593,11 +610,11 @@ try {
   ];
   for (const contact of contactData) {
     const client = seededClients.get(contact.client)!;
-    const exists = await prisma.contact.findFirst({
+    const exists = await db.contact.findFirst({
       where: { clientId: client.id, email: contact.email },
     });
     if (!exists)
-      await prisma.contact.create({
+      await db.contact.create({
         data: {
           clientId: client.id,
           firstName: contact.firstName,
@@ -726,13 +743,13 @@ try {
   >();
   for (const item of opportunityData) {
     const client = seededClients.get(item.client)!;
-    const existing = await prisma.opportunity.findFirst({
+    const existing = await db.opportunity.findFirst({
       where: { clientId: client.id, title: item.title },
       select: { id: true, clientId: true, ownerId: true },
     });
     const opportunity =
       existing ??
-      (await prisma.opportunity.create({
+      (await db.opportunity.create({
         data: {
           clientId: client.id,
           ownerId: client.ownerId,
@@ -746,7 +763,7 @@ try {
         select: { id: true, clientId: true, ownerId: true },
       }));
     if (!existing && item.stage !== "NEW")
-      await prisma.opportunity.update({
+      await db.opportunity.update({
         where: { id: opportunity.id },
         data: { stage: item.stage },
       });
@@ -862,7 +879,7 @@ try {
   ];
   for (const item of historicalOpportunityData) {
     const client = seededClients.get(item.client)!;
-    const exists = await prisma.opportunity.findFirst({
+    const exists = await db.opportunity.findFirst({
       where: { clientId: client.id, title: item.title },
     });
     const confirmedAt = item.outcomeAt;
@@ -878,7 +895,7 @@ try {
           })
         : null;
     if (exists) {
-      await prisma.opportunity.update({
+      await db.opportunity.update({
         where: { id: exists.id },
         data: {
           productSubgroupId: subgroupByName.get(item.subgroup)!.id,
@@ -915,7 +932,7 @@ try {
       });
       continue;
     }
-    const opportunity = await prisma.opportunity.create({
+    const opportunity = await db.opportunity.create({
       data: {
         clientId: client.id,
         ownerId: client.ownerId,
@@ -927,7 +944,7 @@ try {
         createdAt: item.createdAt,
       },
     });
-    await prisma.opportunity.update({
+    await db.opportunity.update({
       where: { id: opportunity.id },
       data: {
         stage: "CLOSED",
@@ -968,13 +985,13 @@ try {
     "Eastern Auto Distributors",
   ]) {
     const client = seededClients.get(clientName)!;
-    const existing = await prisma.clientRevenueSummary.findFirst({
+    const existing = await db.clientRevenueSummary.findFirst({
       where: {
         clientId: client.id,
         evidenceSource: coverageSource,
       },
     });
-    const wins = await prisma.opportunity.findMany({
+    const wins = await db.opportunity.findMany({
       where: {
         clientId: client.id,
         outcome: "WON",
@@ -994,13 +1011,13 @@ try {
         coverageStart,
         coverageEnd,
         evidenceSource: coverageSource,
-        declaration: amount.isZero() ? "NO" : "YES",
+        declaration: (amount.isZero() ? "NO" : "YES") as "NO" | "YES",
         complete: true,
         verifiedAt: coverageVerifiedAt,
         verifiedById: admin.id,
     };
-    if (existing) await prisma.clientRevenueSummary.update({ where: { id: existing.id }, data: coverageData });
-    else await prisma.clientRevenueSummary.create({ data: coverageData });
+    if (existing) await db.clientRevenueSummary.update({ where: { id: existing.id }, data: coverageData });
+    else await db.clientRevenueSummary.create({ data: coverageData });
   }
 
   const interactionData = [
@@ -1034,7 +1051,7 @@ try {
   ];
   for (const item of interactionData) {
     const opportunity = seededOpportunities.get(item.opportunity)!;
-    const exists = await prisma.interaction.findFirst({
+    const exists = await db.interaction.findFirst({
       where: {
         opportunityId: opportunity.id,
         interactionType: item.interactionType,
@@ -1042,7 +1059,7 @@ try {
       },
     });
     if (!exists)
-      await prisma.interaction.create({
+      await db.interaction.create({
         data: {
           clientId: opportunity.clientId,
           opportunityId: opportunity.id,
@@ -1082,16 +1099,16 @@ try {
   ];
   for (const item of followUpData) {
     const opportunity = seededOpportunities.get(item.opportunity)!;
-    const exists = await prisma.followUp.findFirst({
+    const exists = await db.followUp.findFirst({
       where: { opportunityId: opportunity.id, title: item.title },
     });
     if (exists)
-      await prisma.followUp.update({
+      await db.followUp.update({
         where: { id: exists.id },
         data: { channel: item.channel },
       });
     else
-      await prisma.followUp.create({
+      await db.followUp.create({
         data: {
           clientId: opportunity.clientId,
           opportunityId: opportunity.id,
@@ -1105,7 +1122,7 @@ try {
 
   const productsBySku = new Map(
     (
-      await prisma.product.findMany({
+      await db.product.findMany({
         where: { sku: { in: catalogueProducts.map((product) => product.sku) } },
       })
     ).map((product) => [product.sku, product]),
@@ -1352,7 +1369,7 @@ try {
   ];
   const quoteIds = new Map<string, number>();
   for (const quotationData of seededQuotations) {
-    const existing = await prisma.quotation.findUnique({
+    const existing = await db.quotation.findUnique({
       where: {
         quoteNumber_version: {
           quoteNumber: quotationData.quoteNumber,
@@ -1366,7 +1383,7 @@ try {
         existing.id,
       );
       if (existing.current)
-        await prisma.opportunity.update({
+        await db.opportunity.update({
           where: { id: existing.opportunityId },
           data: { estimatedAmount: existing.totalAmount, currency: "KES" },
         });
@@ -1405,10 +1422,10 @@ try {
       .toDecimalPlaces(2);
     const totalAmount = subtotal.minus(discountAmount).toDecimalPlaces(2);
     const issued = quotationData.status !== "DRAFT";
-    const issuedAt = "issueDate" in quotationData
+    const issuedAt = "issueDate" in quotationData && quotationData.issueDate
       ? quotationData.issueDate
       : new Date(quotationData.quoteNumber.includes("2025") ? "2025-07-15T09:00:00.000Z" : "2026-10-26T09:00:00.000Z");
-    const created = await prisma.quotation.create({
+    const created = await db.quotation.create({
       data: {
         quoteNumber: quotationData.quoteNumber,
         version: quotationData.version,
@@ -1449,20 +1466,20 @@ try {
       created.id,
     );
     if (quotationData.current)
-      await prisma.opportunity.update({
+      await db.opportunity.update({
         where: { id: opportunity.id },
         data: { estimatedAmount: totalAmount, currency: "KES" },
       });
   }
 
   for (const opportunity of seededOpportunities.values()) {
-    const currentQuotation = await prisma.quotation.findFirst({
+    const currentQuotation = await db.quotation.findFirst({
       where: { opportunityId: opportunity.id, current: true },
       orderBy: [{ version: "desc" }, { id: "desc" }],
       select: { totalAmount: true, currency: true },
     });
     if (currentQuotation) {
-      await prisma.opportunity.update({
+      await db.opportunity.update({
         where: { id: opportunity.id },
         data: { estimatedAmount: currentQuotation.totalAmount, currency: currentQuotation.currency },
       });
@@ -1470,8 +1487,284 @@ try {
   }
 
   console.log(
-    "Development users, clients, sales history, catalogue, quotations, activities, and revenue coverage ready",
+    `${mode} users, clients, sales history, catalogue, quotations, activities, and revenue coverage ready`,
   );
+}
+
+const seedEmails = [email!, "samuel@autobridge.com", "grace@autobridge.com"];
+const credentialKeys = ["ADMIN_PASSWORD", "SAMUEL_PASSWORD", "GRACE_PASSWORD"] as const;
+
+async function retainedPasswords(): Promise<[string, string, string]> {
+  const file = resolve(process.env.SEED_CREDENTIALS_FILE ?? ".env.production.seed");
+  try {
+    const info = await lstat(file);
+    if (!info.isFile() || (info.mode & 0o077) !== 0)
+      throw new Error("Seed credential file must be a regular file accessible only to its owner (chmod 600)");
+    const values = parse(await readFile(file));
+    const passwords = credentialKeys.map((key) => values[key]);
+    if (passwords.some((value) => !value || value.length < 6 || value.length > 128) || new Set(passwords).size !== 3)
+      throw new Error("Seed credential file requires three distinct passwords of 6 to 128 characters; restore retained credentials or rotate through the account workflow");
+    return passwords as [string, string, string];
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  const passwords = credentialKeys.map(() => randomBytes(32).toString("base64url")) as [string, string, string];
+  const handle = await open(file, "wx", 0o600);
+  try {
+    await handle.writeFile(credentialKeys.map((key, index) => `${key}=${passwords[index]}\n`).join(""));
+  } finally {
+    await handle.close();
+  }
+  console.log(`New account credentials retained in ${file}; keep this ignored file or a secure backup for database recreation`);
+  return passwords;
+}
+
+async function verifyCore() {
+  const users = await prisma.user.findMany({ where: { email: { in: seedEmails } }, select: { email: true, role: true, active: true, approvedAt: true } });
+  const groups = await prisma.productGroup.findMany({ include: { subgroups: true } });
+  const catalogue = await prisma.product.findMany({ where: { sku: { in: catalogueProducts.map((item) => item.sku) } }, include: { productSubgroup: { include: { productGroup: true } } } });
+  assert.equal(users.length, 3, "Seed accounts are incomplete; inspect this database before retrying");
+  assert.ok(users.every((user) => user.active && user.approvedAt && user.role === (user.email === email ? "ADMIN" : "SALES_REP")), "Seed account roles or approval status differ");
+  for (const [group, subgroups] of Object.entries(productGroups)) {
+    const seededGroup = groups.find((item) => item.name === group);
+    assert.ok(seededGroup && subgroups.every((name) => seededGroup.subgroups.some((subgroup) => subgroup.name === name)), "Automotive catalogue groups or subgroups are incomplete");
+  }
+  assert.equal(catalogue.length, catalogueProducts.length, "Automotive catalogue is incomplete; inspect this database before retrying");
+  assert.ok(catalogueProducts.every((item) => catalogue.some((product) =>
+    product.sku === item.sku && product.productSubgroup.name === item.subgroup
+    && product.currency === "KES" && product.priceClassification === "PUBLIC_RETAIL_REFERENCE"
+    && product.active === ("active" in item ? item.active : true)
+    && product.priceSourceUrl === item.url)), "Automotive catalogue details differ from the seed");
+  return { users: users.length, products: catalogue.length };
+}
+
+async function preflight() {
+  const [users, groups, subgroups, products, clientCount, opportunities, quotations, quotationItems, contacts, interactions, followUps, coverages, predictions, reviews, capacities, sessions] = await Promise.all([
+    prisma.user.count(), prisma.productGroup.count(), prisma.productSubgroup.count(), prisma.product.count(),
+    prisma.client.count(), prisma.opportunity.count(), prisma.quotation.count(),
+    prisma.quotationItem.count(),
+    prisma.contact.count(), prisma.interaction.count(), prisma.followUp.count(),
+    prisma.clientRevenueSummary.count(), prisma.opportunityPrediction.count(), prisma.predictionReview.count(),
+    prisma.weeklySalesCapacity.count(), prisma.session.count(),
+  ]);
+  const empty = [users, groups, subgroups, products, clientCount, opportunities, quotations, quotationItems, contacts, interactions, followUps, coverages, predictions, reviews, capacities, sessions].every((count) => count === 0);
+  if (empty) return "EMPTY" as const;
+  await verifyCore();
+  if (mode === "production") return "EXISTING" as const;
+  const baseClients = 7;
+  const baseOpportunities = 21;
+  const baseQuotations = 22;
+  const demoCount = await prisma.opportunity.count({ where: { title: { startsWith: "Demo seed: " } } });
+  const namedClients = await prisma.client.count({ where: { businessName: { in: clients.map((item) => item.businessName) } } });
+  const labelledFollowUps = await prisma.followUp.count({ where: { title: { startsWith: "Demo seed: " } } });
+  if (clientCount !== baseClients || namedClients !== baseClients || contacts !== 6 || interactions !== 4 || coverages !== 4
+    || followUps !== 4 + labelledFollowUps || predictions > demoCount)
+    throw new Error("Database has non-demo or incomplete sales records; demonstration seed refused without changes");
+  if ((clientCount === baseClients && opportunities === baseOpportunities && quotations === baseQuotations && demoCount === 0)
+    || (demoCount > 0 && demoCount <= 20 && clientCount === baseClients
+      && opportunities === baseOpportunities + demoCount
+      && quotations === baseQuotations + demoCount)) return "RESUME_DEMO" as const;
+  throw new Error("Database contains non-demo or inconsistent sales data; demonstration seed refused without changes");
+}
+
+const demoItems = [
+  ["Metro Auto Parts", "AB-BAT-001", "18", "FIELDS_SALES", "Fleet battery renewal"],
+  ["Rift Valley Garage", "AB-RPL-001", "240", "RESELLER", "Spark plug restock"],
+  ["Eastern Auto Distributors", "AB-CEL-001", "35", "RESELLER", "Dash camera distribution"],
+  ["Highland Fleet Workshop", "AB-TYR-001", "14", "FIELDS_SALES", "Regional tyre programme"],
+  ["Metro Auto Parts", "AB-RPL-004", "16", "TELESALES", "Brake disc replenishment"],
+  ["Rift Valley Garage", "AB-GCC-001", "26", "FIELDS_SALES", "Workshop lubricant supply"],
+  ["Eastern Auto Distributors", "AB-BAT-003", "38", "RESELLER", "Battery distribution order"],
+  ["Highland Fleet Workshop", "AB-RPL-005", "160", "TELECOVERAGE", "Fleet oil filter stock"],
+  ["Metro Auto Parts", "AB-TOW-001", "25", "RESELLER", "Recovery equipment order"],
+  ["Rift Valley Garage", "AB-MCY-001", "28", "FIELDS_SALES", "Motorcycle service kits"],
+  ["Eastern Auto Distributors", "AB-EXT-001", "40", "TELESALES", "Exterior protection range"],
+  ["Highland Fleet Workshop", "AB-BAT-002", "50", "FIELDS_SALES", "Workshop battery order"],
+  ["Metro Auto Parts", "AB-INT-001", "45", "RESELLER", "Cabin accessory restock"],
+  ["Rift Valley Garage", "AB-RPL-007", "70", "TELECOVERAGE", "Air filter supply"],
+  ["Eastern Auto Distributors", "AB-TYR-002", "24", "FIELDS_SALES", "Tyre reseller programme"],
+  ["Highland Fleet Workshop", "AB-GCC-003", "36", "TELESALES", "Fleet DEF replenishment"],
+  ["Metro Auto Parts", "AB-BAT-004", "55", "FIELDS_SALES", "Battery retail replenishment"],
+  ["Rift Valley Garage", "AB-RPL-006", "90", "RESELLER", "Fuel filter stock"],
+  ["Eastern Auto Distributors", "AB-SRV-001", "15", "TELECOVERAGE", "Field service shelter supply"],
+  ["Highland Fleet Workshop", "AB-GCC-002", "20", "FIELDS_SALES", "Workshop coolant order"],
+] as const;
+const demoMinutes = [240, 30, 15, 180, 90, 60, 30, 180, 15, 120, 240, 180, 90, 15, 90, 180, 240, 15, 180, 60] as const;
+
+async function seedDemo() {
+  const week = process.env.SEED_DEMO_WEEK_START ?? "2026-11-23";
+  const start = new Date(`${week}T00:00:00.000Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(week) || !Number.isFinite(start.getTime()) || start.getUTCDay() !== 1 || start <= new Date())
+    throw new Error("SEED_DEMO_WEEK_START must be a future Monday (UTC); choose a later week if 23 November has begun");
+  const owner = await prisma.user.findUniqueOrThrow({ where: { email: seedEmails[1] } });
+  const actor = { id: owner.id, role: "SALES_REP" as const };
+  const clientsByName = new Map((await prisma.client.findMany({ where: { ownerId: owner.id, businessName: { in: demoItems.map((item) => item[0]) } } })).map((item) => [item.businessName, item]));
+  const productsBySku = new Map((await prisma.product.findMany({ where: { sku: { in: demoItems.map((item) => item[1]) }, active: true } })).map((item) => [item.sku, item]));
+  const service = new OpportunityService();
+  const scoring = new OpportunityScoringService();
+  const opportunities: Opportunity[] = [];
+  for (const [clientName, sku, quantity, routeToMarket, label] of demoItems) {
+    const client = clientsByName.get(clientName);
+    const product = productsBySku.get(sku);
+    assert.ok(client && product, `Missing owned client or active catalogue product for ${label}`);
+    const title = `Demo seed: ${label}`;
+    const matches = await prisma.opportunity.findMany({ where: { title } });
+    assert.ok(matches.length <= 1 && (!matches[0] || (matches[0].clientId === client.id && matches[0].ownerId === owner.id && matches[0].outcome === null)), `Conflicting demonstration opportunity: ${title}`);
+    if (matches[0]) {
+      const expectedAmount = product.defaultSellingPrice.mul(quantity).toDecimalPlaces(2);
+      assert.ok(matches[0].estimatedAmount.equals(expectedAmount) && matches[0].routeToMarket === routeToMarket
+        && matches[0].productSubgroupId === product.productSubgroupId && matches[0].stage !== "CLOSED",
+      `Demonstration opportunity was edited; seed will not rescore or overwrite ${title}`);
+    }
+    const opportunity = matches[0] ?? await service.create(actor, {
+      clientId: client.id, productSubgroupId: product.productSubgroupId, title, routeToMarket,
+      estimatedCloseAt: new Date(start.getTime() + 21 * 86_400_000).toISOString(),
+      items: [{ productId: product.id, quantity }],
+    });
+    opportunities.push(opportunity);
+  }
+  const predictions: OpportunityPrediction[] = [];
+  for (const opportunity of opportunities) {
+    const prediction = await scoring.score(actor, opportunity.id);
+    assert.ok(prediction && prediction.explanation && typeof prediction.explanation === "object" && "status" in prediction.explanation && prediction.explanation.status === "available", `Genuine model prediction and SHAP required for ${opportunity.title}`);
+    predictions.push(prediction);
+  }
+  assert.ok(predictions.some((item) => item.modelVariant === "PRIMARY") && predictions.some((item) => item.modelVariant === "LIMITED_HISTORY"), "Both model variants are required");
+  const actions = opportunities.flatMap((opportunity, index) => [
+    { opportunity, minutes: demoMinutes[index], key: "primary", channel: demoMinutes[index] <= 15 ? "EMAIL" : demoMinutes[index] <= 30 ? "CALL" : demoMinutes[index] <= 90 ? "MEETING" : "SITE_VISIT" },
+    ...(index < 4 ? [{ opportunity, minutes: demoMinutes[index], key: "alternate", channel: ["MEETING", "EMAIL", "CALL", "MEETING"][index] }] : []),
+  ]);
+  const slots = Array.from({ length: 6 }, () => 0);
+  const proposed = actions.map((action, index) => {
+    const day = slots.findIndex((used) => used + action.minutes <= 540);
+    assert.ok(day >= 0, "Demo follow-ups do not fit the selected week without overlap");
+    const dueAt = new Date(start.getTime() + day * 86_400_000 + (300 + slots[day]) * 60_000);
+    slots[day] += action.minutes;
+    const prediction = predictions[opportunities.findIndex((item) => item.id === action.opportunity.id)];
+    const valueUsd = new Prisma.Decimal(String((prediction.conversionSnapshot as { modelReadyAmountUsd: string }).modelReadyAmountUsd));
+    return {
+      id: index + 1, opportunityId: action.opportunity.id, title: action.opportunity.title,
+      clientName: "", channel: action.channel, dueAt, probability: Number(prediction.wonProbability),
+      valueUsd: valueUsd.toFixed(2), expectedValueUsd: valueUsd.mul(prediction.wonProbability).toFixed(2),
+      attention: null, effortMinutes: action.minutes, key: action.key, clientId: action.opportunity.clientId,
+    };
+  });
+  const comparison = [25, 30].map((hours) => ({ hours, result: optimizeWeekly(proposed, hours * 60) }));
+  const selected = comparison.find(({ result }) => result.baselines.every((base) => new Prisma.Decimal(base.expectedValueUsd).lt(result.optimal.expectedValueUsd)));
+  if (!selected) throw new Error("Genuine model outputs did not yield a strict Knapsack improvement at 25 or 30 hours; review the synthetic scenario before scheduling");
+  for (const row of proposed) {
+    const title = `Demo seed: ${row.key} follow-up for ${row.title.slice(11)}`;
+    const existing = await prisma.followUp.findFirst({ where: { ownerId: owner.id, title } });
+    if (existing) {
+      assert.ok(existing.opportunityId === row.opportunityId && existing.clientId === row.clientId
+        && existing.dueAt.getTime() === row.dueAt.getTime() && existing.estimatedMinutes === row.effortMinutes
+        && existing.completedAt === null, `Demonstration follow-up was edited; seed will not overwrite ${title}`);
+      continue;
+    }
+    await prisma.followUp.create({ data: { ownerId: owner.id, clientId: row.clientId, opportunityId: row.opportunityId, title, channel: row.channel, dueAt: row.dueAt, estimatedMinutes: row.effortMinutes } });
+  }
+  const completedTitle = "Demo seed: completed battery requirements meeting";
+  const completed = await prisma.followUp.findFirst({ where: { ownerId: owner.id, title: completedTitle } });
+  if (!completed) {
+    const dueAt = new Date(start.getTime() - 4 * 86_400_000 + 6 * 3_600_000);
+    await prisma.followUp.create({ data: { ownerId: owner.id, clientId: opportunities[0].clientId,
+      opportunityId: opportunities[0].id, title: completedTitle, channel: "MEETING", dueAt,
+      estimatedMinutes: 60, completedAt: new Date(dueAt.getTime() + 60 * 60_000) } });
+  } else assert.ok(completed.opportunityId === opportunities[0].id && completed.completedAt, "Completed demo follow-up was edited");
+  const capacity = await prisma.weeklySalesCapacity.findUnique({ where: { userId_weekStart: { userId: owner.id, weekStart: start } } });
+  if (!capacity) await prisma.weeklySalesCapacity.create({ data: { userId: owner.id, weekStart: start, availableMinutes: selected.hours * 60 } });
+  else assert.equal(capacity.availableMinutes, selected.hours * 60, "Demo capacity was changed; seed will not overwrite it");
+  await verifyDemo();
+}
+
+async function verifyDemo() {
+  const week = process.env.SEED_DEMO_WEEK_START ?? "2026-11-23";
+  const owner = await prisma.user.findUniqueOrThrow({ where: { email: seedEmails[1] } });
+  const titles = demoItems.map((item) => `Demo seed: ${item[4]}`);
+  const opportunities = await prisma.opportunity.findMany({
+    where: { ownerId: owner.id, title: { in: titles } },
+    include: { predictions: { orderBy: [{ predictedAt: "desc" }, { id: "desc" }], take: 1 }, quotations: { where: { current: true }, include: { items: true } } },
+  });
+  assert.equal(opportunities.length, demoItems.length, "Demonstration opportunities are incomplete");
+  assert.ok(opportunities.every((item) => item.predictions.length === 1 && item.predictions[0].explanation &&
+    typeof item.predictions[0].explanation === "object" && !Array.isArray(item.predictions[0].explanation) &&
+    "status" in item.predictions[0].explanation && item.predictions[0].explanation.status === "available" &&
+    item.quotations.length === 1 && item.quotations[0].items.length > 0), "Genuine predictions, SHAP, or itemized quotations are missing");
+  const actor = { id: owner.id, role: "SALES_REP" as const };
+  const allocation = new WeeklyAllocationService();
+  const plan = await allocation.plan(actor, week);
+  assert.equal(plan.candidates.length, demoItems.length + 4, "Weekly planner candidate set is incomplete");
+  assert.ok(plan.candidates.every((item) => titles.includes(item.title)
+    && new Prisma.Decimal(item.valueUsd).mul(item.probability).minus(item.expectedValueUsd).abs().lte("0.01")),
+  "Candidate ownership or probability-weighted value differs from the seeded scenario");
+  assert.ok(!plan.excluded.some((item) => titles.includes(item.title)), "Demonstration predictions are stale or otherwise ineligible");
+  assert.ok(plan.comparisons.slice(1).every((base) => new Prisma.Decimal(base.expectedValueUsd).lt(plan.selectedExpectedValueUsd)), "Knapsack does not exceed every greedy baseline");
+  const names = new Map(plan.candidates.map((item) => [item.id, `${item.title} (${item.channel}, ${item.effortMinutes} min)`]));
+  const results = plan.comparisons.map((item) => ({ method: item.method, selectedFollowUps: item.ids.map((id) => names.get(id)),
+    allocatedHours: item.allocatedMinutes / 60, weightedValueUsd: item.expectedValueUsd,
+    shareOfBestPercent: Number(new Prisma.Decimal(item.expectedValueUsd).div(plan.selectedExpectedValueUsd).mul(100).toFixed(1)) }));
+  for (const result of plan.comparisons) {
+    const chosen = plan.candidates.filter((item) => result.ids.includes(item.id));
+    assert.equal(new Set(chosen.map((item) => item.opportunityId)).size, chosen.length, "One follow-up per opportunity invariant failed");
+    assert.ok(result.allocatedMinutes <= (plan.remainingMinutes ?? 0), "Capacity exceeded");
+  }
+  const schedule = [...plan.candidates].sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime());
+  assert.ok(schedule.every((item, index) => index === 0 || schedule[index - 1].dueAt.getTime()
+    + schedule[index - 1].effortMinutes * 60_000 <= item.dueAt.getTime()), "Demo follow-ups overlap");
+  const repeated = await allocation.plan(actor, week);
+  assert.deepEqual(repeated.comparisons.map((item) => [item.method, item.ids, item.expectedValueUsd]),
+    plan.comparisons.map((item) => [item.method, item.ids, item.expectedValueUsd]), "Planner results changed without data changes");
+  const alternativeBudgets = [25, 30].map((hours) => {
+    const budget = hours * 60 - plan.completedMinutes;
+    const comparison = optimizeWeekly(plan.candidates, budget);
+    return { weeklyHours: hours, remainingHours: budget / 60,
+      valuesUsd: [comparison.optimal.expectedValueUsd, ...comparison.baselines.map((item) => item.expectedValueUsd)] };
+  });
+  assert.ok(alternativeBudgets.every((item) => item.valuesUsd.slice(1).every((value) => new Prisma.Decimal(value).lt(item.valuesUsd[0]))),
+    "The 25- and 30-hour alternatives must both show strict improvement");
+  console.log(JSON.stringify({ week, representative: owner.email, weeklyHours: (plan.availableMinutes ?? 0) / 60,
+    completedHours: plan.completedMinutes / 60, remainingHours: (plan.remainingMinutes ?? 0) / 60,
+    modelVariants: opportunities.map((item) => item.predictions[0].modelVariant).reduce((counts, variant) => ({ ...counts, [variant]: counts[variant] + 1 }), { PRIMARY: 0, LIMITED_HISTORY: 0 }),
+    alternativeBudgets, results }, null, 2));
+}
+
+try {
+  if (mode === "verify") {
+    const summary = await verifyCore();
+    console.log(`Read-only seed verification: ${summary.users} approved accounts, ${summary.products} catalogue products`);
+    if (process.env.SEED_DEMO_WEEK_START) await verifyDemo();
+  } else if (mode === "development") {
+    await seedBase(prisma, [developmentPassword!, developmentPassword!, developmentPassword!], false);
+  } else {
+    if (mode === "demo") {
+      const week = process.env.SEED_DEMO_WEEK_START ?? "2026-11-23";
+      const start = new Date(`${week}T00:00:00.000Z`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(week) || !Number.isFinite(start.getTime()) || start.getUTCDay() !== 1 || start <= new Date())
+        throw new Error("Set SEED_DEMO_WEEK_START to a future Monday before adding demonstration records");
+      if (!process.env.ML_API_URL || !process.env.ML_API_TOKEN)
+        throw new Error("ML_API_URL and ML_API_TOKEN are required for genuine demonstration predictions");
+      const ready = await fetch(`${process.env.ML_API_URL.replace(/\/$/, "")}/ready`, { signal: AbortSignal.timeout(10_000) });
+      if (!ready.ok) throw new Error(`FastAPI is not ready (${ready.status}); no demonstration records were changed`);
+    }
+    const state = await preflight();
+    if (state === "EMPTY") {
+      const passwords = await retainedPasswords();
+      await prisma.$transaction(async (tx) => {
+        if (await tx.user.count() || await tx.product.count() || await tx.client.count())
+          throw new Error("Database changed during seed preflight; initialization refused");
+        await seedBase(tx, passwords, mode === "production");
+      }, { timeout: 300_000 });
+    }
+    const summary = await verifyCore();
+    if (mode === "demo") await seedDemo();
+    console.log(`Seed ${mode} complete: ${summary.users} approved accounts, ${summary.products} catalogue products`);
+  }
+} catch (error) {
+  const message = error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2021"
+    ? "Database tables are missing; run npx prisma migrate deploy first"
+    : error instanceof Error ? error.message : "unknown error";
+  console.error(`Seed ${mode} failed: ${message}`);
+  process.exitCode = 1;
 } finally {
   await prisma.$disconnect();
 }

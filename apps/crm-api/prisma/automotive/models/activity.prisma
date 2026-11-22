@@ -23,6 +23,8 @@ model FollowUp {
   title         String
   channel       String?
   dueAt         DateTime
+  estimatedMinutes Int?
+  appointmentConfirmed Boolean @default(false)
   completedAt   DateTime?
   createdAt     DateTime  @default(now())
 

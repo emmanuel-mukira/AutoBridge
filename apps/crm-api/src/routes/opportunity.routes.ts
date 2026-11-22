@@ -6,6 +6,7 @@ import {
 } from "../middleware/auth.js";
 import * as controller from "../controllers/opportunity.controller.js";
 import * as predictionController from "../controllers/opportunityPrediction.controller.js";
+import * as quotationController from "../controllers/quotation.controller.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -24,6 +25,12 @@ router.post(
   requireTrustedOrigin,
   requireCsrf,
   predictionController.score,
+);
+router.post(
+  "/:id/quotations",
+  requireTrustedOrigin,
+  requireCsrf,
+  quotationController.create,
 );
 router.post(
   "/:id/predictions/:predictionId/reviews",
