@@ -32,6 +32,8 @@ export interface WeeklyPlan {
   withoutFollowUps: { id: number; title: string }[];
   excluded: { id: number; title: string; reason: string }[];
   candidates: WeeklyCandidate[];
+  scoredFollowUps: WeeklyCandidate[];
+  prioritizationSource: "WEEK" | "OVERDUE";
   recommended: WeeklyCandidate[];
   allocatedMinutes: number;
   unusedMinutes: number | null;

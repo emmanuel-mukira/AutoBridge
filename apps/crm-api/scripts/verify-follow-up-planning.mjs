@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { accountWeeklyWork, activityMinutes } from "../dist/src/services/weeklyAllocationService.js";
+import { accountWeeklyWork, activityMinutes, prioritizationPool } from "../dist/src/services/weeklyAllocationService.js";
 import { optimizeWeekly } from "../dist/src/services/weeklyOptimization.js";
 
 const start = new Date("2026-11-09T00:00:00Z");
@@ -64,3 +64,16 @@ assert.deepEqual(grouped.optimal.ids, [8, 9]);
 assert.ok(grouped.baselines.every((row) => new Set(row.ids.map((id) => sameOpportunity.find((item) => item.id === id).opportunityId)).size === row.ids.length));
 assert.throws(() => optimizeWeekly([candidates[0], { ...candidates[1], id: 1 }], 120), /INVALID_CANDIDATES/);
 console.log("Follow-up accounting, completion-week attribution, all-pending eligibility and knapsack checks passed");
+
+const later = item(100, "CALL", "2026-11-14T09:00:00Z");
+const backlog = item(101, "CALL", "2026-11-06T09:00:00Z");
+assert.deepEqual([...prioritizationPool([later, backlog], start, end, now).ids], [100]);
+assert.equal(prioritizationPool([backlog], start, end, now).source, "OVERDUE");
+assert.deepEqual([...prioritizationPool([backlog], start, end, now).ids], [101]);
+assert.equal(prioritizationPool([{...backlog, completedAt: now}], start, end, now).ids.size, 0);
+const nextStart = new Date("2026-11-16T00:00:00Z");
+const nextEnd = new Date("2026-11-23T00:00:00Z");
+const next = item(102, "EMAIL", "2026-11-17T09:00:00Z");
+assert.deepEqual([...prioritizationPool([later, next, backlog], nextStart, nextEnd, now).ids], [102]);
+assert.deepEqual([...prioritizationPool([later], nextStart, nextEnd, now).ids], []);
+console.log("Weekly window and overdue fallback checks passed");

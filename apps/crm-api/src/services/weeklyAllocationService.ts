@@ -27,6 +27,13 @@ export function accountWeeklyWork(items: PlanningFollowUp[], start: Date, end: D
   };
 }
 
+export function prioritizationPool(items: PlanningFollowUp[], start: Date, end: Date, now: Date) {
+  const pending = items.filter((item) => !item.completedAt);
+  const week = pending.filter((item) => item.dueAt >= start && item.dueAt < end && item.dueAt >= now);
+  return { source: week.length ? "WEEK" as const : "OVERDUE" as const,
+    ids: new Set((week.length ? week : pending.filter((item) => item.dueAt < now && item.dueAt < end)).map((item) => item.id)) };
+}
+
 const followUpView = (item: PlanningFollowUp) => ({
   id: item.id, title: item.title, opportunityId: item.opportunityId,
   opportunityTitle: item.opportunity?.title ?? null, clientName: item.client.businessName,
@@ -82,20 +89,18 @@ export class WeeklyAllocationService {
       }),
     ]);
     const work = accountWeeklyWork(followUps, start, end, now);
+    const pool = prioritizationPool(followUps, start, end, now);
     const availableMinutes = capacity?.availableMinutes ?? null;
     const remainingMinutes = availableMinutes === null ? null : Math.max(0, availableMinutes - work.completedMinutes);
     const overbooked = availableMinutes !== null && work.completedMinutes > availableMinutes;
     const pendingByOpportunity = new Map<number, PlanningFollowUp[]>();
-    const otherPending: ReturnType<typeof followUpView>[] = [];
     for (const item of work.pending) {
-      if (item.opportunityId === null || work.overdueIds.has(item.id))
-        otherPending.push(followUpView(item));
-      else pendingByOpportunity.set(item.opportunityId, [...(pendingByOpportunity.get(item.opportunityId) ?? []), item]);
+      if (item.opportunityId !== null) pendingByOpportunity.set(item.opportunityId, [...(pendingByOpportunity.get(item.opportunityId) ?? []), item]);
     }
     const evidence = await this.salesHistory.evidenceForClients(
       actor, [...new Set(opportunities.map((item) => item.clientId))], now,
     );
-    const candidates: PlanningCandidate[] = [];
+    const scoredFollowUps: PlanningCandidate[] = [];
     const excluded: { id: number; title: string; reason: string }[] = [];
     const withoutFollowUps: { id: number; title: string }[] = [];
     for (const opportunity of opportunities) {
@@ -122,27 +127,24 @@ export class WeeklyAllocationService {
         reason = "Stale prediction";
       if (reason) {
         excluded.push({ id: opportunity.id, title: opportunity.title, reason });
-        otherPending.push(...actions.map(followUpView));
         continue;
       }
       const valueUsd = new Prisma.Decimal(current!.conversion.modelReadyAmountUsd);
       if (!valueUsd.isFinite() || valueUsd.isNegative()) {
         excluded.push({ id: opportunity.id, title: opportunity.title, reason: "Invalid estimated value" });
-        otherPending.push(...actions.map(followUpView));
         continue;
       }
-      for (const followUp of actions) candidates.push({
+      for (const followUp of actions) scoredFollowUps.push({
         id: followUp.id, opportunityId: opportunity.id, title: opportunity.title,
         clientName: followUp.client.businessName, channel: followUp.channel, dueAt: followUp.dueAt,
         probability: Number(prediction!.wonProbability),
         valueUsd: valueUsd.toFixed(2),
         expectedValueUsd: valueUsd.times(prediction!.wonProbability).toFixed(2),
         effortMinutes: activityMinutes(followUp),
-        attention: null,
+        attention: work.overdueIds.has(followUp.id) ? "OVERDUE" : null,
       });
     }
-    for (const [opportunityId, actions] of pendingByOpportunity)
-      if (!opportunities.some((item) => item.id === opportunityId)) otherPending.push(...actions.map(followUpView));
+    const candidates = scoredFollowUps.filter((item) => pool.ids.has(item.id));
     if (candidates.length > 200) throw new Error("TOO_MANY_CANDIDATES");
     const result = availableMinutes !== null && !overbooked
       ? optimizeWeekly(candidates, remainingMinutes!) : null;
@@ -150,14 +152,13 @@ export class WeeklyAllocationService {
       ? candidates.filter((item) => result.optimal.ids.includes(item.id))
         .sort((a, b) => new Prisma.Decimal(b.expectedValueUsd).comparedTo(a.expectedValueUsd) || a.dueAt.getTime() - b.dueAt.getTime() || a.id - b.id)
       : [];
-    const unselected = candidates.filter((item) => !result?.optimal.ids.includes(item.id))
-      .map((item) => followUpView(followUps.find((followUp) => followUp.id === item.id)!));
     return {
       weekStart, generatedAt: now, availableMinutes,
       completedMinutes: work.completedMinutes, pendingMinutes: work.pendingMinutes,
       remainingMinutes, overbooked,
       completed: work.completed.map(followUpView),
-      otherPending: [...otherPending, ...unselected],
+      otherPending: work.pending.filter((item) => !recommended.some((selected) => selected.id === item.id)).map(followUpView),
+      scoredFollowUps, prioritizationSource: pool.source,
       withoutFollowUps, excluded, candidates, recommended,
       allocatedMinutes: result?.optimal.allocatedMinutes ?? 0,
       unusedMinutes: result ? remainingMinutes! - result.optimal.allocatedMinutes : remainingMinutes,
