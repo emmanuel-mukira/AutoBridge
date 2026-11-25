@@ -1,3 +1,4 @@
+import { getResearchEvaluation } from "./researchEvaluation.js";
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
 import { prisma } from "../client.js";
@@ -105,6 +106,7 @@ export async function getModelPerformance() {
     },
   });
   return {
+    researchEvaluation: await getResearchEvaluation(),
     modelVersion: metadata.model_version,
     modelName: "Automotive 5 · Random Forest",
     evaluation: {

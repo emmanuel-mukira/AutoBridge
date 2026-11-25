@@ -47,6 +47,7 @@ logs/
 /docs/
 /apps/crm-api/data/*
 !/apps/crm-api/data/ibm-reliability-summary.json
+!/apps/crm-api/data/research-evaluation-summary.json
 /graphify-out/
 archive/
 *plan*.md

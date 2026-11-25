@@ -64,8 +64,6 @@ export function WeeklyOpportunityAllocation() {
   const completedPercent = data?.availableMinutes
     ? Math.round((data.completedMinutes / data.availableMinutes) * 100)
     : 0;
-  const allFit = data?.status === "READY" &&
-    new Set(data.candidates.map((item) => item.opportunityId)).size === data.recommended.length;
   const money = (value: string) => formatMoney(Number(value), "USD", displayCurrency);
   const pendingPreview = data?.otherPending ?? [];
   const candidateById = new Map(data?.scoredFollowUps.map((item) => [item.id, item]) ?? []);
@@ -161,33 +159,13 @@ export function WeeklyOpportunityAllocation() {
           <div className="flex flex-wrap items-center gap-3"><Button size="sm" variant="outline" asChild><Link to="/dashboard/follow-ups?from=decision-support">View pending follow-ups <ArrowUpRight className="ml-1 size-4" aria-hidden="true" /></Link></Button>
             {data.excluded.length > 0 && <Link to={opportunityLink(data.excluded[0].id)} className="text-primary hover:underline">{data.excluded.length} opportunities need scoring or review</Link>}</div>
         </section>
-        <div className="grid gap-3 lg:grid-cols-2">
+        <div className="space-y-3">
           <section className="flex h-full min-h-48 flex-col rounded-lg border bg-card p-4">
             <div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold">Unscheduled opportunities</h3><p className="mt-1 text-xs text-muted-foreground">Open opportunities with no pending next action.</p></div><span className="rounded-md bg-muted px-2 py-0.5 text-sm font-semibold tabular-nums">{data.withoutFollowUps.length}</span></div>
             {data.withoutFollowUps.length ? <ul className="mt-3 divide-y rounded-md border text-sm">{data.withoutFollowUps.slice(0, 4).map((item) =>
               <li key={item.id}><Link to={opportunityLink(item.id)} className="flex min-h-11 items-center justify-between gap-3 px-3 py-2 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"><span className="min-w-0 truncate font-medium">{item.title}</span><ArrowUpRight className="size-4 shrink-0 text-primary" aria-hidden="true" /><span className="sr-only">Open opportunity to schedule a follow-up</span></Link></li>)}</ul>
               : <p className="mt-3 rounded-md border border-dashed p-4 text-sm text-muted-foreground">Every open opportunity has a pending next action.</p>}
             <Button size="sm" variant="outline" asChild className="mt-3 self-start"><Link to="/dashboard/opportunities">View opportunities <ArrowUpRight className="ml-1 size-4" aria-hidden="true" /></Link></Button>
-          </section>
-          <section className="flex h-full min-h-48 flex-col gap-3 rounded-lg border bg-card p-4">
-            <div><h3 className="font-semibold">Algorithm comparison</h3><p className="mt-1 text-xs text-muted-foreground">Share of the best weighted value using the same follow-ups and hours.</p></div>
-            {data.comparisons.length ? <div className="space-y-2 text-xs">{data.comparisons.map((row) => {
-              const best = Number(data.selectedExpectedValueUsd);
-              const value = Number(row.expectedValueUsd);
-              const gap = Math.max(0, best - value);
-              const share = best > 0 ? Math.min(100, (value / best) * 100) : 0;
-              return <div key={row.method} className={`rounded-md border px-3 py-2 ${row.method === "KNAPSACK" ? "border-primary/40 bg-primary/5" : ""}`}>
-                <div className="flex flex-wrap items-baseline justify-between gap-x-3"><span className="font-medium text-foreground">{row.method === "KNAPSACK" ? "0/1 Knapsack" : row.method === "PROBABILITY" ? "Win probability" : row.method === "VALUE" ? "Opportunity value" : "Weighted value"}</span><span className="font-semibold tabular-nums text-foreground">{best > 0 ? `${share.toFixed(1)}%` : "—"}</span></div>
-                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${share}%` }} /></div>
-                <div className="mt-1 flex flex-wrap justify-between gap-x-3 text-muted-foreground"><span>{row.count} actions · {hours(row.allocatedMinutes)}</span><span>{money(row.expectedValueUsd)}{gap > 0.005 ? ` · ${money(gap.toFixed(2))} below best` : best > 0 && row.method !== "KNAPSACK" ? " · tied best" : ""}</span></div>
-              </div>;
-            })}</div> : <p className="text-sm text-muted-foreground">Save weekly hours to compare methods.</p>}
-            {allFit && data.candidates.length > 0 && <p className="text-xs text-muted-foreground">At least one action from every eligible opportunity fits; methods may tie.</p>}
-            <details className="mt-auto rounded-md border bg-muted/30 text-xs"><summary className="cursor-pointer px-3 py-2 font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">How is the plan chosen?</summary>
-              <div className="space-y-2 border-t px-3 py-3 text-muted-foreground"><p><strong className="text-foreground">Planning value</strong> = opportunity value × saved win probability. This is an estimate, not a sales result.</p>
-                <p><strong className="text-foreground">Knapsack</strong> finds the highest combined planning value that fits the hours left after completed work. It takes each action whole, with at most one action per opportunity. Longer actions get no bonus.</p>
-                <p><strong className="text-foreground">Comparison methods</strong> take actions in order of probability, opportunity value, or weighted value. “Below best” is the value they miss against knapsack; a tie is a valid result. When no pending actions remain later in the selected week, overdue actions compete for that week’s remaining hours.</p></div>
-            </details>
           </section>
         </div>
       </>}

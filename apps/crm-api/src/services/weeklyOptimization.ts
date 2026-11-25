@@ -133,12 +133,16 @@ export function optimizeWeekly(
     }
   }
   const optimal = summary(ids, ordered, capacityMinutes);
-  const baselines = (["PROBABILITY", "VALUE", "WEIGHTED_VALUE"] as const).map(
+  const baselines = (["PROBABILITY", "VALUE", "WEIGHTED_VALUE", "VALUE_PER_HOUR"] as const).map(
     (method) => {
       const sorted = [...ordered].sort((a, b) => {
         const score =
           method === "PROBABILITY"
             ? b.probability - a.probability
+            : method === "VALUE_PER_HOUR"
+              // Compare value/duration by cross multiplication, without rounded division.
+              ? new Prisma.Decimal(b.expectedValueUsd).times(a.effortMinutes)
+                .comparedTo(new Prisma.Decimal(a.expectedValueUsd).times(b.effortMinutes))
             : new Prisma.Decimal(
                 method === "VALUE" ? b.valueUsd : b.expectedValueUsd,
               ).comparedTo(
