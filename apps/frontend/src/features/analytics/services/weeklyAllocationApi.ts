@@ -39,7 +39,7 @@ export interface WeeklyPlan {
   unusedMinutes: number | null;
   selectedExpectedValueUsd: string;
   comparisons: {
-    method: "KNAPSACK" | "PROBABILITY" | "VALUE" | "WEIGHTED_VALUE";
+    method: "KNAPSACK" | "PROBABILITY" | "VALUE" | "WEIGHTED_VALUE" | "VALUE_PER_HOUR";
     ids: number[];
     allocatedMinutes: number;
     expectedValueUsd: string;

@@ -43,7 +43,7 @@ export default function DecisionSupport() {
   return <div className="space-y-4">
     <h1 className="text-3xl font-bold tracking-tight">Decision Support</h1>
     {user?.role === "ADMIN" ? <Tabs defaultValue="opportunities">
-      <TabsList aria-label="Decision support views"><TabsTrigger value="opportunities">Opportunities</TabsTrigger><TabsTrigger value="performance">Model performance</TabsTrigger></TabsList>
+      <TabsList className="h-auto max-w-full flex-wrap justify-start" aria-label="Decision support views"><TabsTrigger value="opportunities">Opportunities</TabsTrigger><TabsTrigger className="whitespace-normal text-left" value="performance">Predictive and Optimization Evaluation</TabsTrigger></TabsList>
       <TabsContent value="opportunities" className="mt-4"><OpportunityDecisionSupport /></TabsContent>
       <TabsContent value="performance" className="mt-4"><ModelPerformancePanel /></TabsContent>
     </Tabs> : <OpportunityDecisionSupport />}

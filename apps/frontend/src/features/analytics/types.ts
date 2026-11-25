@@ -162,6 +162,7 @@ export interface ReliabilitySummary {
 }
 
 export interface ModelPerformance {
+  researchEvaluation: ResearchEvaluation;
   modelVersion: string;
   modelName: string;
   evaluation: {
@@ -180,4 +181,64 @@ export interface ModelReliability {
   source: string;
   explanation: string;
   warning: string;
+}
+
+export interface ResearchEvaluation {
+  schemaVersion: 1;
+  version: string;
+  modelVersion: string;
+  predictive: {
+    testCount: number;
+    bootstrapReplicates: number;
+    shapSample: number;
+    shapBackground: number;
+    models: {
+      name: string;
+      inputs: number;
+      artifactSha256: string;
+      metrics: { label: string; value: number; lower: number; upper: number }[];
+      reliability: {
+        label: string;
+        count: number;
+        meanPrediction: number | null;
+        observedWinRate: number | null;
+      }[];
+      shap: { attribute: string; percentagePoints: number; share: number }[];
+    }[];
+    algorithms: {
+      name: string;
+      rocAuc: number;
+      averagePrecision: number;
+      brier: number;
+    }[];
+  };
+  optimization: {
+    scenarios: number;
+    feasibleOutputs: number;
+    feasibilityViolations: number;
+    optimality: { tested: number; passed: number; failed: number };
+    deterministicTests: { passed: number; failed: number; skipped: number };
+    definedPercentageCases: number;
+    zeroDenominatorCases: number;
+    baselines: {
+      method: "PROBABILITY" | "VALUE" | "WEIGHTED_VALUE" | "VALUE_PER_HOUR";
+      medianImprovementPercent: number;
+      strictWins: number;
+      ties: number;
+      meanGapUsd: number;
+      worstGapUsd: number;
+    }[];
+    runtime: {
+      candidateCount: number;
+      groupCount: number;
+      capacityMinutes: number;
+      repetitions: number;
+      warmups: number;
+      medianMs: number;
+      p95Ms: number;
+    }[];
+    runtimeCpu: string;
+    runtimeNode: string;
+  };
+  sourceSha256: Record<string, string>;
 }

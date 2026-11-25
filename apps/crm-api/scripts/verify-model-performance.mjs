@@ -1,8 +1,76 @@
-import assert from "node:assert/strict";
-import express from "express";
 import { predictionReliability } from "../dist/src/domain/predictionReliability.js";
 import { prisma } from "../dist/src/client.js";
 import analyticsRouter from "../dist/src/routes/analytics.routes.js";
+import assert from "node:assert/strict";
+import express from "express";
+import { readFile } from "node:fs/promises";
+import {
+  getResearchEvaluation,
+  researchEvaluationSchema,
+} from "../dist/src/services/researchEvaluation.js";
+
+const packaged = JSON.parse(
+  await readFile(
+    new URL("../data/research-evaluation-summary.json", import.meta.url),
+    "utf8",
+  ),
+);
+const built = JSON.parse(
+  await readFile(
+    new URL("../dist/data/research-evaluation-summary.json", import.meta.url),
+    "utf8",
+  ),
+);
+assert.deepEqual(
+  built,
+  packaged,
+  "Build must include the exact sanitized aggregate",
+);
+assert.deepEqual(await getResearchEvaluation(), packaged);
+assert.equal(researchEvaluationSchema.safeParse(undefined).success, false);
+for (const corrupt of [
+  (data) => {
+    data.records = [{ opportunityId: 1 }];
+  },
+  (data) => {
+    data.predictive.models[0].reliability[0].count++;
+  },
+  (data) => {
+    data.predictive.models[1].reliability[9].meanPrediction = 0.9;
+  },
+  (data) => {
+    data.predictive.models[0].metrics[0].value = NaN;
+  },
+  (data) => {
+    data.predictive.models[0].metrics[0].lower = 0.99;
+  },
+  (data) => {
+    data.predictive.models[0].shap[0].share = 0;
+  },
+  (data) => {
+    data.optimization.baselines[0].strictWins = 501;
+  },
+  (data) => {
+    data.optimization.baselines[1] = data.optimization.baselines[0];
+  },
+  (data) => {
+    data.optimization.runtime[0].medianMs = Infinity;
+  },
+]) {
+  const invalid = structuredClone(packaged);
+  corrupt(invalid);
+  assert.equal(
+    researchEvaluationSchema.safeParse(invalid).success,
+    false,
+    "Invalid or unsanitized aggregate must be rejected",
+  );
+}
+assert.equal(packaged.predictive.models[1].reliability[9].meanPrediction, null);
+assert.equal(
+  packaged.optimization.baselines.find((row) => row.method === "VALUE_PER_HOUR")
+    .strictWins,
+  97,
+);
 
 const before = new Date("2026-01-01");
 const closed = new Date("2026-02-01");
@@ -52,7 +120,9 @@ assert.equal(result.atLeast70.count, 3);
 assert.equal(result.atLeast70.won, 2);
 assert.equal(result.atLeast70.lost, 1);
 assert.equal(result.atLeast70.observedWinRate, 2 / 3);
-assert.ok(Math.abs(result.atLeast70.meanPrediction - (0.7 + 1 + 0.9) / 3) < 1e-12);
+assert.ok(
+  Math.abs(result.atLeast70.meanPrediction - (0.7 + 1 + 0.9) / 3) < 1e-12,
+);
 assert.equal(result.bins[0].count, 1);
 assert.equal(result.bins[6].count, 1);
 assert.equal(result.bins[7].count, 1);
@@ -120,6 +190,11 @@ try {
     body.evaluation.metrics.map((metric) => metric.value),
     [0.81441, 0.60221, 0.13079],
   );
+  assert.deepEqual(
+    body.researchEvaluation,
+    packaged,
+    "Admin API must return the exact approved aggregates",
+  );
   assert.equal(body.reliability.atLeast70.won, 2);
   assert.equal(body.reliability.atLeast70.count, 3);
   assert.equal(body.reliability.bins[9].won, 1);
@@ -133,7 +208,7 @@ try {
   );
   assert.ok(body.demonstrationReliability.bins.every((bin) => bin.count > 0));
   console.log(
-    "PASS: frozen metrics, admin route, 401/403, latest pre-outcome selection, both model variants, empty and boundary bins, >=70% cohort",
+    "PASS: packaged/build/API aggregate fidelity, invalid/missing summary rejection, frozen metrics, admin route, 401/403, latest pre-outcome selection, both model variants, empty and boundary bins, >=70% cohort",
   );
 } finally {
   server.closeAllConnections();

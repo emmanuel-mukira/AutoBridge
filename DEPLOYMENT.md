@@ -1,6 +1,6 @@
 # AutoBridge deployment guide
 
-Repository review: 22 November 2026. This is a deployment checklist and command reference; no Neon, Render or Cloudflare deployment has been executed.
+Repository review: 23 November 2026. This is a deployment checklist and command reference; no Neon, Render or Cloudflare deployment has been executed.
 
 Target: **Cloudflare Pages → Render Express API → Neon PostgreSQL**, with **Express → Render private FastAPI service** for inference. Each service deploys independently from this monorepo. Replace example domains with domains you control.
 
@@ -9,15 +9,15 @@ Target: **Cloudflare Pages → Render Express API → Neon PostgreSQL**, with **
 | Area | Current repository state | Remaining work |
 | --- | --- | --- |
 | Frontend | Vite build and `VITE_API_URL` supported. | Connect Pages, configure API URL, set custom domain and test direct routes. |
-| Express | Production start command and `/health` exist. | Add Dockerfile and `.dockerignore`; generate Prisma client/build; package metadata and demonstration JSON; add database readiness; configure proxy handling. |
-| FastAPI | Loads frozen artifacts; bearer authentication, `/health` and `/ready` exist. | Add Dockerfile and `.dockerignore`; package artifacts; verify a clean dependency install and start with an externally reachable binding. |
+| Express | `apps/crm-api/Dockerfile` installs locked dependencies, generates Prisma Client, compiles TypeScript and packages metadata plus the tracked aggregate JSON. `/health` is a process check. | Verify the built image against a disposable database; configure proxy handling and a separate database readiness gate. |
+| FastAPI | `services/ml-api/Dockerfile` installs pinned inference dependencies and packages both frozen artifacts plus metadata; `/ready` checks model loading. | Verify image memory, cold start and inference in the target Render instance. |
 | Database | Prisma schema/migrations exist; runtime reads `DATABASE_URL_ADMIN`. | Create Neon production branch/database and separate app/migration roles; apply migrations once. |
 | Authentication | Production cookies are secure, `SameSite=Lax`; exact-origin CORS and CSRF checks exist. | Set domain arrangement, fresh secrets and trusted origin; test real HTTPS login and state-changing requests. |
 | Model Performance | Reads repository-relative metadata and the tracked aggregate `apps/crm-api/data/ibm-reliability-summary.json`. | Package both files in the Express image and verify the compiled endpoint. |
 | First admin and sample data | `seed.ts` now has guarded production and complete demo modes; the development command remains local-only. | Run migrations and the selected seed on a fresh database, then verify. Keep generated account credentials in a protected backup. |
 | Acceptance | Earlier local checks are development evidence. | Build final images, verify cloud connections, browser workflows, capacity boundary behaviour and measured memory/cold starts. |
 
-No Dockerfiles or Render blueprint were found in the reviewed checkout. Commands that refer to the proposed Dockerfiles below are for use **after those files are implemented**. This plan does not create them.
+Both Dockerfiles use the repository root as build context. The root `.dockerignore` excludes local credentials, notebooks, datasets and build artifacts. There is no Render blueprint; configure the services separately.
 
 Before release, verify the future-week candidate boundary identified in `docs/autobridge-documentation-revision-guide.md`; the current weekly service should be tested for excluding still-future activities belonging to a different week.
 
@@ -95,7 +95,7 @@ The API uses `pg.Pool` with its defaults. Make the pool budget explicit before s
 
 ## 5. Package and deploy FastAPI on Render
 
-Create `services/ml-api/Dockerfile` with the **repository root as Docker build context**, so it can copy `models/automotive_v1`. Add `.dockerignore` rules excluding populated environment files, datasets, virtual environments, Git data and unrelated files.
+Use `services/ml-api/Dockerfile` with the **repository root as Docker build context**, so it can copy `models/automotive_v1`. The root `.dockerignore` excludes populated environment files, datasets, virtual environments, Git data and unrelated files.
 
 Package:
 
@@ -107,16 +107,16 @@ models/automotive_v1/automotive_limited_history_fallback.joblib
 models/automotive_v1/metadata.json
 ```
 
-Validate pinned Python dependencies in a clean image while preserving artifact-compatible versions. Review `pytest`/`httpx` as test dependencies rather than automatically shipping the entire research environment. Do not train or regenerate frozen models during image build.
+The image installs pinned inference dependencies from `services/ml-api/requirements.runtime.txt`. `requirements.txt` adds `pytest` and `httpx` only for local tests. Do not train or regenerate frozen models during image build.
 
-Suggested image working layout: application at `/app/services/ml-api`, artifacts at `/app/models/automotive_v1`. Start with one worker to avoid duplicating loaded forests and explainers until memory measurements justify more workers:
+Image working layout: application at `/app/services/ml-api`, artifacts at `/app/models/automotive_v1`. The Docker `CMD` starts one worker to avoid duplicating loaded forests and explainers until memory measurements justify more workers:
 
 ```bash
 # Container command; requires the image's working directory to contain app/.
 uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --workers 1
 ```
 
-Use a shell-form wrapper if the Docker command needs `${PORT}` expansion; a literal exec-array argument does not expand shell variables. Ensure the wrapper uses `exec` so termination signals reach Uvicorn.
+The Docker `CMD` uses a shell wrapper with `exec` so `${PORT}` expands and termination signals reach Uvicorn.
 
 Render settings:
 
@@ -129,9 +129,11 @@ Render settings:
 | `PORT` | `8000`, matching the internal port used by Express |
 | `MODEL_ARTIFACT_DIR` | `/app/models/automotive_v1` |
 | `ML_API_TOKEN` | Fresh generated value, identical to Express's token |
-| Health/readiness | Check `/ready`; it verifies both models loaded |
+| Health/readiness | Render private services use a TCP health check; verify `/ready` separately from Express or a Render shell |
 
 Copy Render's actual internal hostname and append the listening port for `ML_API_URL`; do not guess the hostname or use `127.0.0.1`. Cloudflare needs no ML URL or token. The private address cannot be tested directly from your laptop; use the API container or a Render shell.
+
+In Render, create a **Docker private service** from the reviewed repository commit. Leave Root Directory unset, set Dockerfile Path to `services/ml-api/Dockerfile` and Docker Build Context to `.`. Keep the API and ML services in the same region. Use the Dockerfile's `CMD`, set `PORT=8000`, and supply `ML_API_TOKEN` through Render's protected environment settings. The private service has no public URL; Render checks its open port, while `/ready` must be checked separately after startup.
 
 ## 6. Package the Model Performance aggregate JSON
 
@@ -153,7 +155,7 @@ Preserve the IBM demonstration label and distinguish it from application outcome
 
 ## 7. Package and deploy Express on Render
 
-Create `apps/crm-api/Dockerfile`, again using the repository root as build context. The build stage must install locked dependencies, run Prisma generation, and compile TypeScript. It needs development dependencies for TypeScript and Prisma tooling; the runtime can omit them if migrations run in a separate job/image.
+Use `apps/crm-api/Dockerfile`, again with the repository root as build context. Its build stage installs locked dependencies, generates Prisma Client and compiles TypeScript. The final image runs as the non-root `node` user with production dependencies. A separate `migrate` build target retains Prisma CLI for an explicit migration job; it is never run at API startup.
 
 Commands inside the API build stage, from `apps/crm-api`:
 
@@ -163,7 +165,7 @@ npx prisma generate
 npm run build
 ```
 
-Package compiled code, production dependencies/generated Prisma client, required schema/migrations for the release path, `models/automotive_v1/metadata.json`, and `apps/crm-api/data/ibm-reliability-summary.json`. Retain the repository-relative layout used by `modelPerformanceService.ts`; copying only `dist/` will omit its external files. Provide a nonsecret placeholder URL only if tooling requires one during generation; never supply production database credentials as image build arguments.
+The image packages compiled code, production dependencies/generated Prisma client, schema/migrations, `models/automotive_v1/metadata.json`, and `apps/crm-api/data/ibm-reliability-summary.json`. The ignored record-level `ibm-reliability-demo.json` is neither required nor packaged. The repository-relative layout used by `modelPerformanceService.ts` is preserved. Never supply production database credentials as image build arguments.
 
 Render runtime variables:
 
@@ -178,7 +180,31 @@ ML_API_TOKEN=<same generated ML_API_TOKEN as FastAPI>
 ML_API_TIMEOUT_MS=5000
 ```
 
-Start: `npm run start` from `/app/apps/crm-api`, which runs `node dist/src/index.js`. Configure Render's health path as `/health`; add a separate database readiness check before treating this as a complete release gate. The existing Express listener uses Render's `PORT`.
+Start: use the Dockerfile `CMD` (`node dist/src/index.js`) from `/app/apps/crm-api`. Configure Render's HTTP health path as `/health`; add a separate database readiness check before treating this as a complete release gate. Express binds to `0.0.0.0` on Render's `PORT`.
+
+In Render, create a **Docker web service** from the same reviewed repository commit. Leave Root Directory unset, set Dockerfile Path to `apps/crm-api/Dockerfile` and Docker Build Context to `.`. Use the Dockerfile's `CMD`; do not run a seed or migration in the start command. Set the HTTP health path to `/health`. The current checkout branch is `feat/automotive-app`; select the reviewed deployment branch after merging rather than assuming it is already on `main`.
+
+| Variable | Service | Required | Purpose and source |
+| --- | --- | --- | --- |
+| `NODE_ENV` | Express | Yes: `production` | Enables secure session cookies and production behavior; set in Render. |
+| `PORT` | Express | Render supplied | Listening port; Express reads it and otherwise defaults to `3000`. |
+| `DATABASE_URL_ADMIN` | Express | Yes | Neon application-role connection URL with provider TLS settings. Despite the name, use a restricted runtime role. |
+| `FRONTEND_ORIGIN` | Express | Yes | Exact deployed HTTPS frontend origin for CORS, CSRF and auth; set after choosing domains. |
+| `SESSION_SECRET` | Express | Yes | Independent generated signing secret, at least 32 characters; set in Render. |
+| `ML_API_URL` | Express | Yes for scoring | Actual Render private ML URL and port, learned after private service creation. |
+| `ML_API_TOKEN` | Express and FastAPI | Yes for scoring | Same independent generated bearer token in both Render services. |
+| `ML_API_TIMEOUT_MS` | Express | Optional | Inference timeout; source default is `5000`. |
+| `LOG_LEVEL` | Express | Optional | Runtime log level; source default is `info`. |
+| `DATABASE_URL_ADMIN` | Explicit migration job only | Yes for migrations | Neon **direct migration-role** URL, supplied only when running the `migrate` image target. No separate `DATABASE_URL` variable is used by this checkout. |
+| `PORT` | FastAPI | Set to `8000` | Private listening port; Docker command defaults to `8000` locally. |
+| `MODEL_ARTIFACT_DIR` | FastAPI | Optional | Image default resolves to `/app/models/automotive_v1`; set to that path if configuring explicitly. |
+| `VITE_API_URL` | Cloudflare Pages | Yes | Public Express HTTPS origin, without `/api`; this is the only frontend deployment variable in this flow. |
+| `ADMIN_EMAIL`, `ADMIN_FIRST_NAME`, `ADMIN_LAST_NAME` | Explicit seed job only | Yes for initial seed | Initial administrator identity; see the seeding guide. The representatives' emails are defined by the seed. |
+| `SEED_CONFIRM_DATABASE` | Explicit seed job only | Yes | Exact target database name; guard against seeding the wrong database. |
+| `SEED_CONFIRM_REMOTE_DEMO`, `SEED_DEMO_WEEK_START` | Demo seed job only | Yes for remote demo | Exact remote hostname and a future UTC Monday for the selected demo week. |
+| `SEED_CREDENTIALS_FILE` | Seed job only | Optional | Path to retained, owner-only account passwords; otherwise `.env.production.seed` in the seed working directory. |
+
+The demo seed also needs the same `ML_API_URL` and `ML_API_TOKEN` as Express. `ADMIN_PASSWORD` is for the local `seed:dev` command, not a Render runtime variable; production account passwords come from the protected seed credential file or are generated on first initialization.
 
 Configure `trust proxy` for the actual Render proxy arrangement before production rate-limit testing. The current login limiter keys by `req.ip`, and a missing proxy configuration can group users behind the proxy; an overly permissive configuration can trust forged client headers. Test the chosen setting rather than blindly trusting every forwarded header. Begin with one API instance because rate-limit storage is currently per process.
 
@@ -212,12 +238,18 @@ The account passwords are retained in `.env.production.seed` with restrictive pe
 
 ## 10. Release checks and commands
 
-After both Dockerfiles and packaging are implemented, from the repository root:
+Build both images from the repository root, matching Render's context and Dockerfile paths:
 
 ```bash
 docker build -f apps/crm-api/Dockerfile -t autobridge-api:release .
 docker build -f services/ml-api/Dockerfile -t autobridge-ml:release .
 ```
+
+Local image checks on 23 November 2026: both images built; the Express image loaded its Prisma Client, exposed `/health` on a chosen `PORT`, retained schema/migrations, metadata and the aggregate JSON, and stopped cleanly. The FastAPI image loaded both frozen models, returned `/health` and `/ready`, generated the expected primary and fallback probabilities with available SHAP explanations, rejected an unauthenticated request, and stopped cleanly. A request from the Express image to the FastAPI image over a temporary private Docker network also passed. These checks used test-only values and no database; they do not establish Neon or Render behavior. After loading and two inference calls, the local ML container used about 184 MiB; choose a Render instance after measuring cold starts and load there.
+
+The Express image build reported 10 production dependency advisories: one critical, eight high and one moderate. An audit from the built migration image identified `proxy-addr` as the critical package; `body-parser`, `path-to-regexp`, `qs`, Prisma-related packages and `zod` also need review. Triage and resolve applicable runtime advisories before public release. Do not treat the image build as a security approval.
+
+For an explicit controlled migration operation, build the separate CLI target with `docker build --target migrate -f apps/crm-api/Dockerfile -t autobridge-api:migrate .`, then run it against the selected database with a protected direct migration-role `DATABASE_URL_ADMIN`. Do not set that direct URL on the normal Express service or run migration during every container start.
 
 Validate images against a disposable staging database first. Pass runtime secrets through the hosting dashboard or protected env files; keep them out of command-line literals and image layers.
 

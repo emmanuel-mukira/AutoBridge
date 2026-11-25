@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResearchEvaluationPanel } from "./ResearchEvaluationPanel";
 import { useModelPerformance } from "../hooks/useAnalytics";
 
 const percent = (value: number | null) =>
@@ -35,7 +36,7 @@ export function ModelPerformancePanel() {
   if (query.isError)
     return (
       <Alert variant="destructive">
-        <AlertTitle>Model performance unavailable</AlertTitle>
+        <AlertTitle>Evaluation unavailable</AlertTitle>
         <AlertDescription>
           Unable to load evaluation results.{" "}
           <Button variant="outline" size="sm" onClick={() => query.refetch()}>
@@ -44,7 +45,6 @@ export function ModelPerformancePanel() {
         </AlertDescription>
       </Alert>
     );
-  const { evaluation } = query.data;
   const reliability =
     source === "demo"
       ? query.data.demonstrationReliability
@@ -53,37 +53,7 @@ export function ModelPerformancePanel() {
   const chart = reliability.bins.filter((bin) => bin.count > 0);
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">{query.data.modelName}</h2>
-          <p className="text-sm text-muted-foreground">{evaluation.source}</p>
-        </div>
-        <div className="text-right text-xs text-muted-foreground">
-          <p>{query.data.modelVersion}</p>
-          <p>
-            {query.isFetching
-              ? "Updating…"
-              : `Fetched ${new Date(query.dataUpdatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`}
-          </p>
-        </div>
-      </div>
-      <div className="grid gap-3 md:grid-cols-3">
-        {evaluation.metrics.map((metric) => (
-          <Card key={metric.key}>
-            <CardContent className="p-4">
-              <h3 className="text-sm font-medium">{metric.label}</h3>
-              <p className="mt-1 text-2xl font-bold tabular-nums text-primary">
-                {metric.value.toFixed(5)}
-              </p>
-              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                {metric.explanation}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-      <p className="text-xs text-muted-foreground">{evaluation.limitation}</p>
+    <ResearchEvaluationPanel data={query.data}>
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -230,7 +200,7 @@ export function ModelPerformancePanel() {
           ) : (
             <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
               No eligible outcomes yet. The chart will appear when opportunities
-              with a saved primary-model prediction are recorded as Won or Lost.
+              with a saved model prediction are recorded as Won or Lost.
             </div>
           )}
           <div className="space-y-1 text-xs text-muted-foreground">
@@ -243,6 +213,6 @@ export function ModelPerformancePanel() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </ResearchEvaluationPanel>
   );
 }
