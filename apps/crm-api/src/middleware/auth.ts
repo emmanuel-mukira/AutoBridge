@@ -28,7 +28,8 @@ export function setSessionCookie(res: Response, token: string): void {
   res.cookie(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    // The hosted frontend and API use different sites; CSRF and origin checks remain required.
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     path: "/",
     maxAge: SESSION_MS,
   });
@@ -38,7 +39,7 @@ export function clearSessionCookie(res: Response): void {
   res.clearCookie(SESSION_COOKIE, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
     path: "/",
   });
 }

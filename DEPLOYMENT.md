@@ -1,6 +1,6 @@
 # AutoBridge deployment guide
 
-Repository review: 23 November 2026. This is a deployment checklist and command reference; no Neon, Render or Cloudflare deployment has been executed.
+Repository review: 23 November 2026; database migration update: 25 November 2026. The existing local database has been restored into Neon and verified. Render services and the Cloudflare frontend have not yet been deployed.
 
 Target: **Cloudflare Pages → Render Express API → Neon PostgreSQL**, with **Express → Render private FastAPI service** for inference. Each service deploys independently from this monorepo. Replace example domains with domains you control.
 
@@ -11,10 +11,10 @@ Target: **Cloudflare Pages → Render Express API → Neon PostgreSQL**, with **
 | Frontend | Vite build and `VITE_API_URL` supported. | Connect Pages, configure API URL, set custom domain and test direct routes. |
 | Express | `apps/crm-api/Dockerfile` installs locked dependencies, generates Prisma Client, compiles TypeScript and packages metadata plus the tracked aggregate JSON. `/health` is a process check. | Verify the built image against a disposable database; configure proxy handling and a separate database readiness gate. |
 | FastAPI | `services/ml-api/Dockerfile` installs pinned inference dependencies and packages both frozen artifacts plus metadata; `/ready` checks model loading. | Verify image memory, cold start and inference in the target Render instance. |
-| Database | Prisma schema/migrations exist; runtime reads `DATABASE_URL_ADMIN`. | Create Neon production branch/database and separate app/migration roles; apply migrations once. |
+| Database | Local business records and migration history restored into Neon; runtime reads `DATABASE_URL_ADMIN`. | Configure a restricted application role separately from the migration owner, then verify hosted API database access. |
 | Authentication | Production cookies are secure, `SameSite=Lax`; exact-origin CORS and CSRF checks exist. | Set domain arrangement, fresh secrets and trusted origin; test real HTTPS login and state-changing requests. |
 | Model Performance | Reads repository-relative metadata and the tracked aggregate `apps/crm-api/data/ibm-reliability-summary.json`. | Package both files in the Express image and verify the compiled endpoint. |
-| First admin and sample data | `seed.ts` now has guarded production and complete demo modes; the development command remains local-only. | Run migrations and the selected seed on a fresh database, then verify. Keep generated account credentials in a protected backup. |
+| First admin and sample data | Eight existing accounts and local business records restored; future follow-ups reuse saved predictions. | Use existing account passwords; review test-account access before public release. Do not seed this populated database again. |
 | Acceptance | Earlier local checks are development evidence. | Build final images, verify cloud connections, browser workflows, capacity boundary behaviour and measured memory/cold starts. |
 
 Both Dockerfiles use the repository root as build context. The root `.dockerignore` excludes local credentials, notebooks, datasets and build artifacts. There is no Render blueprint; configure the services separately.
@@ -231,6 +231,12 @@ VITE_API_URL=https://api.your-domain.com npm run build
 ```
 
 ## 9. Initialize accounts, catalogue and optional demonstration records
+
+The current Neon database was initialized by restoring the existing local PostgreSQL database, **not by rerunning a seed**. All original records in 16 application/migration tables and all sequence values were verified against the source. The eight existing accounts and their password hashes were preserved; old login sessions were excluded. All 13 migration records match the repository migration-file checksums. Do not initialize or seed this populated database again.
+
+An append-only helper then added 96 follow-ups across the weeks beginning 30 November and 7 December 2026, with eight capacity records carrying forward existing weekly capacities. It used current saved predictions and existing quotations, preserved all original records, and made no model-inference calls. All eight weekly planner checks passed; a subsequent dry run planned zero additional rows. Protected backups and operational verification results are retained locally under the Git-ignored `docs/deployment_backups/`; they contain private recovery material and must not be published.
+
+For a separate, fresh database where existing records are not being restored, the seed remains an alternative:
 
 Follow [the tracked production seeding guide](apps/crm-api/docs/production-seeding.md). From `apps/crm-api`, apply `npx prisma migrate deploy` with the selected direct migration URL, then run either `npm run seed:production` or `npm run seed:demo` against a fresh database. The former creates approved accounts and the 29-item automotive catalogue. The latter additionally creates labelled synthetic sales examples, calls the private FastAPI service for genuine predictions/SHAP and verifies a 25/30-hour Knapsack comparison. `npm run verify:seed` is read-only. Set the exact database-name confirmation and, for remote demo insertion, the exact hostname confirmation. Do not run seeding at every API startup.
 
