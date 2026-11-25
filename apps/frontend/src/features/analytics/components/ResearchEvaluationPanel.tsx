@@ -10,6 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ChartContainer,
   ChartTooltip,
@@ -33,18 +34,13 @@ import {
 } from "@/components/ui/table";
 import type { ModelPerformance } from "../types";
 
-const decimal = (value: number) => value.toFixed(5);
 const percent = (value: number) => `${(value * 100).toFixed(1)}%`;
-const usd = (value: number) =>
-  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
-    value,
-  );
 const methodLabels = {
   PROBABILITY: "Win probability",
   VALUE: "Opportunity value",
   WEIGHTED_VALUE: "Weighted value",
   VALUE_PER_HOUR: "Weighted value/hour",
-};
+} as const;
 const fieldLabels: Record<string, string> = {
   "Opportunity Amount USD": "Opportunity amount",
   "Revenue From Client Past Two Years": "Client revenue (2 years)",
@@ -52,6 +48,37 @@ const fieldLabels: Record<string, string> = {
   "Supplies Group": "Supplies group",
   "Supplies Subgroup": "Supplies subgroup",
 };
+
+function ModelCard({
+  model,
+}: {
+  model: ModelPerformance["researchEvaluation"]["predictive"]["models"][number];
+}) {
+  return (
+    <Card className="min-w-0">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">
+          {model.name === "Fallback RF"
+            ? "Limited-History Random Forest"
+            : "Primary Random Forest"}{" "}
+          <span className="font-normal text-muted-foreground">
+            · {model.inputs} inputs
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="grid grid-cols-3 gap-2 pt-0">
+        {model.metrics.map((metric) => (
+          <div key={metric.label} className="rounded-md bg-muted/50 p-2">
+            <p className="text-xs text-muted-foreground">{metric.label}</p>
+            <p className="mt-1 text-xl font-semibold tabular-nums">
+              {metric.value.toFixed(3)}
+            </p>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
 
 export function ResearchEvaluationPanel({
   data,
@@ -63,7 +90,6 @@ export function ResearchEvaluationPanel({
   const [modelName, setModelName] = useState("Primary RF");
   const [capacity, setCapacity] = useState("4800");
   const research = data.researchEvaluation;
-  // Older API deployments can still serve operational monitoring during a rolling update.
   if (!research)
     return (
       <div className="space-y-4">
@@ -83,10 +109,20 @@ export function ResearchEvaluationPanel({
       ...row,
       label: fieldLabels[row.attribute] ?? row.attribute,
     }));
+  const reliability = p.models.flatMap((model) =>
+    model.reliability
+      .filter((bin) => bin.count > 0)
+      .map((bin) => ({
+        ...bin,
+        model: model.name,
+        predicted: bin.meanPrediction,
+        observed: bin.observedWinRate,
+      })),
+  );
   const runtime = o.runtime.filter(
     (row) => row.capacityMinutes === Number(capacity),
   );
-
+  const density = o.baselines.find((row) => row.method === "VALUE_PER_HOUR");
   return (
     <div className="min-w-0 space-y-4">
       <div>
@@ -108,234 +144,142 @@ export function ResearchEvaluationPanel({
             Optimization Evaluation
           </TabsTrigger>
         </TabsList>
-        <TabsContent value="predictive" className="mt-4 space-y-6">
-          <section className="space-y-2" aria-labelledby="test-performance">
-            <h3 id="test-performance" className="font-semibold">
-              Internal test performance
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Both frozen Random Forest models were evaluated on the same{" "}
-              {p.testCount.toLocaleString()} IBM automotive/RV test
-              opportunities.
-            </p>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Model</TableHead>
-                  <TableHead>Metric</TableHead>
-                  <TableHead>Estimate</TableHead>
-                  <TableHead>95% confidence interval</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {p.models.flatMap((model) =>
-                  model.metrics.map((metric) => (
-                    <TableRow key={`${model.name}-${metric.label}`}>
-                      <TableCell>
-                        {model.name} · {model.inputs} inputs
-                      </TableCell>
-                      <TableCell>{metric.label}</TableCell>
-                      <TableCell className="tabular-nums">
-                        {decimal(metric.value)}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap tabular-nums">
-                        {decimal(metric.lower)}–{decimal(metric.upper)}
-                      </TableCell>
-                    </TableRow>
-                  )),
-                )}
-              </TableBody>
-            </Table>
+        <TabsContent value="predictive" className="mt-4 space-y-5">
+          <section className="space-y-3" aria-labelledby="model-performance">
+            <div>
+              <h3 id="model-performance" className="font-semibold">
+                Model performance
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Three internal test metrics across{" "}
+                {p.testCount.toLocaleString()} IBM automotive/RV opportunities.
+                Higher ROC-AUC and Average Precision are better; lower Brier
+                Score is better.
+              </p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {p.models.map((model) => (
+                <ModelCard key={model.name} model={model} />
+              ))}
+            </div>
             <p className="text-xs text-muted-foreground">
-              {p.bootstrapReplicates.toLocaleString()} stratified bootstrap
-              repetitions; percentile intervals condition on the fitted models
-              and observed class mix. They exclude training, customer-cluster
-              and external-population uncertainty.
-            </p>
-            <details className="text-sm">
-              <summary className="cursor-pointer font-medium">
-                How to read the metrics
-              </summary>
-              <div className="mt-2 space-y-1 text-muted-foreground">
-                {data.evaluation.metrics.map((metric) => (
-                  <p key={metric.key}>
-                    <strong>{metric.label}:</strong> {metric.explanation}
-                  </p>
-                ))}
-              </div>
-            </details>
-            <p className="text-sm text-muted-foreground">
-              Internal IBM evaluation does not establish performance for
-              independent automotive suppliers. The fallback was tested on the
-              full internal test set with revenue excluded; this is not a
-              verified population with unavailable or unreliable client history.
-              Unknown history remains distinct from verified zero revenue.
-            </p>
-          </section>
-          <section className="space-y-2" aria-labelledby="matched-algorithms">
-            <h3 id="matched-algorithms" className="font-semibold">
-              Matched five-input algorithm comparison
-            </h3>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Algorithm</TableHead>
-                  <TableHead>ROC-AUC ↑</TableHead>
-                  <TableHead>Average Precision ↑</TableHead>
-                  <TableHead>Brier Score ↓</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {p.algorithms.map((row) => (
-                  <TableRow key={row.name}>
-                    <TableCell>
-                      {row.name === "Primary RF" ? "Random Forest" : row.name}
-                    </TableCell>
-                    <TableCell>{decimal(row.rocAuc)}</TableCell>
-                    <TableCell>{decimal(row.averagePrecision)}</TableCell>
-                    <TableCell>{decimal(row.brier)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            <p className="text-sm text-muted-foreground">
-              Random Forest produced the strongest test point estimates, with
-              XGBoost close. This post-selection internal comparison does not
-              establish statistical superiority. All three use the same five
-              inputs and test rows; the four-input operational fallback is
-              evaluated separately above.
+              Confidence intervals remain in the evaluation artifacts. This is
+              internal IBM dataset evidence, not external supplier validation.
+              The limited-history model was evaluated on the full test set with
+              revenue excluded, not a verified missing-history subgroup.
             </p>
           </section>
           <section
-            className="space-y-3"
+            className="space-y-2"
             aria-labelledby="probability-reliability"
           >
             <h3 id="probability-reliability" className="font-semibold">
-              Probability reliability
+              Prediction reliability
             </h3>
-            <div className="grid min-w-0 gap-5 lg:grid-cols-2">
-              {p.models.map((model) => (
-                <div key={model.name} className="min-w-0 space-y-2">
-                  <h4 className="text-sm font-medium">{model.name}</h4>
-                  <ChartContainer
-                    className="h-64 w-full min-w-0 aspect-auto"
-                    config={{
-                      observedWinRate: {
-                        label: "Observed win rate",
-                        color: "var(--primary)",
-                      },
-                    }}
-                  >
-                    <LineChart
-                      accessibilityLayer
-                      data={model.reliability.filter((bin) => bin.count > 0)}
-                      margin={{ top: 10, right: 15, bottom: 22, left: 5 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis
-                        type="number"
-                        dataKey="meanPrediction"
-                        domain={[0, 1]}
-                        tickFormatter={percent}
-                        label={{
-                          value: "Mean predicted probability",
-                          position: "bottom",
-                          offset: 3,
-                          fontSize: 11,
-                        }}
-                        tick={{ fontSize: 10 }}
-                      />
-                      <YAxis
-                        domain={[0, 1]}
-                        tickFormatter={percent}
-                        width={46}
-                        tick={{ fontSize: 10 }}
-                        label={{
-                          value: "Observed win rate",
-                          angle: -90,
-                          position: "insideLeft",
-                          fontSize: 11,
-                        }}
-                      />
-                      <ReferenceLine
-                        segment={[
-                          { x: 0, y: 0 },
-                          { x: 1, y: 1 },
-                        ]}
-                        stroke="var(--muted-foreground)"
-                        strokeDasharray="5 5"
-                      />
-                      <ChartTooltip
-                        content={
-                          <ChartTooltipContent
-                            labelFormatter={(_label, payload) => {
-                              const row = payload[0]?.payload;
-                              return row
-                                ? `${row.label} · n=${row.count.toLocaleString()} · predicted ${percent(row.meanPrediction)}`
-                                : "";
-                            }}
-                            formatter={(value) => (
-                              <span>
-                                Observed win rate: {percent(Number(value))}
-                              </span>
-                            )}
-                          />
-                        }
-                      />
-                      <Line
-                        type="linear"
-                        dataKey="observedWinRate"
-                        name="Observed win rate"
-                        stroke="var(--color-observedWinRate)"
-                        strokeWidth={2}
-                        dot={{ r: 4 }}
-                        isAnimationActive={false}
-                      />
-                    </LineChart>
-                  </ChartContainer>
-                  <p className="text-xs text-muted-foreground">
-                    Dashed diagonal: ideal reliability. Hover over a point for
-                    its bin support.
-                  </p>
-                </div>
-              ))}
-            </div>
-            <details className="text-sm">
-              <summary className="cursor-pointer font-medium">
-                Sample support by probability band
-              </summary>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Band</TableHead>
-                    {p.models.map((model) => (
-                      <TableHead key={model.name}>{model.name} n</TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {p.models[0].reliability.map((bin, index) => (
-                    <TableRow key={bin.label}>
-                      <TableCell>{bin.label}</TableCell>
-                      {p.models.map((model) => (
-                        <TableCell key={model.name}>
-                          {model.reliability[index].count.toLocaleString()}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </details>
             <p className="text-sm text-muted-foreground">
-              Reliability is imperfect; sparse high-probability bins require
-              caution. Empty bins are omitted from the curves. Bins include
-              their upper bound; only the first includes zero. Probability
-              errors can distort weighted planning values. Both models retain
-              their original raw probabilities.
+              Predicted win probabilities are compared with observed win
+              frequencies by probability band.
+            </p>
+            <ChartContainer
+              className="h-72 w-full min-w-0 aspect-auto"
+              config={{
+                primary: {
+                  label: "Primary Random Forest",
+                  color: "var(--primary)",
+                },
+                fallback: {
+                  label: "Limited-history Random Forest",
+                  color: "#f59e0b",
+                },
+              }}
+            >
+              <LineChart
+                accessibilityLayer
+                data={reliability}
+                margin={{ top: 12, right: 16, bottom: 30, left: 8 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis
+                  type="number"
+                  dataKey="predicted"
+                  domain={[0, 1]}
+                  tickFormatter={percent}
+                  tick={{ fontSize: 10 }}
+                  label={{
+                    value: "Predicted win probability",
+                    position: "bottom",
+                    offset: 8,
+                    fontSize: 11,
+                  }}
+                />
+                <YAxis
+                  domain={[0, 1]}
+                  tickFormatter={percent}
+                  width={48}
+                  tick={{ fontSize: 10 }}
+                  label={{
+                    value: "Observed win frequency",
+                    angle: -90,
+                    position: "insideLeft",
+                    fontSize: 11,
+                  }}
+                />
+                <ReferenceLine
+                  segment={[
+                    { x: 0, y: 0 },
+                    { x: 1, y: 1 },
+                  ]}
+                  stroke="var(--muted-foreground)"
+                  strokeDasharray="5 5"
+                />
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent
+                      labelFormatter={(_label, payload) => {
+                        const row = payload[0]?.payload;
+                        return row
+                          ? `${row.model} · ${row.label} · n=${row.count.toLocaleString()}`
+                          : "";
+                      }}
+                      formatter={(value) => (
+                        <span>Observed: {percent(Number(value))}</span>
+                      )}
+                    />
+                  }
+                />
+                <Line
+                  data={reliability.filter((row) => row.model === "Primary RF")}
+                  type="linear"
+                  dataKey="observed"
+                  name="Primary Random Forest"
+                  stroke="var(--color-primary)"
+                  strokeWidth={2}
+                  dot={{ r: 4 }}
+                  isAnimationActive={false}
+                />
+                <Line
+                  data={reliability.filter(
+                    (row) => row.model === "Fallback RF",
+                  )}
+                  type="linear"
+                  dataKey="observed"
+                  name="Limited-history Random Forest"
+                  stroke="var(--color-fallback)"
+                  strokeWidth={2}
+                  dot={{ r: 4 }}
+                  isAnimationActive={false}
+                />
+                <Legend />
+              </LineChart>
+            </ChartContainer>
+            <p className="text-xs text-muted-foreground">
+              Dashed diagonal indicates ideal calibration. Empty probability
+              bins are omitted, not treated as zero. Sigmoid calibration changed
+              validation Brier Score only from 0.12921 to 0.12919, so the
+              original probabilities were retained.
             </p>
           </section>
-          <section className="space-y-3" aria-labelledby="global-shap">
+          <section className="space-y-2" aria-labelledby="global-shap">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 id="global-shap" className="font-semibold">
                 Global SHAP importance
@@ -347,7 +291,9 @@ export function ResearchEvaluationPanel({
                 <SelectContent>
                   {p.models.map((model) => (
                     <SelectItem key={model.name} value={model.name}>
-                      {model.name}
+                      {model.name === "Fallback RF"
+                        ? "Limited-history RF"
+                        : "Primary RF"}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -366,23 +312,23 @@ export function ResearchEvaluationPanel({
                 accessibilityLayer
                 layout="vertical"
                 data={importance}
-                margin={{ left: 0, right: 24, bottom: 22 }}
+                margin={{ left: 0, right: 24, bottom: 24 }}
               >
                 <CartesianGrid horizontal={false} />
                 <XAxis
                   type="number"
                   tick={{ fontSize: 10 }}
                   label={{
-                    value: "Mean absolute SHAP (pp)",
+                    value: "Mean absolute SHAP (percentage points)",
                     position: "bottom",
                     fontSize: 10,
-                    offset: 3,
+                    offset: 5,
                   }}
                 />
                 <YAxis
                   type="category"
                   dataKey="label"
-                  width={118}
+                  width={125}
                   tick={{ fontSize: 10 }}
                 />
                 <ChartTooltip
@@ -393,7 +339,7 @@ export function ResearchEvaluationPanel({
                       }
                       formatter={(value, _name, item) => (
                         <span>
-                          {Number(value).toFixed(4)} pp ·{" "}
+                          {Number(value).toFixed(3)} pp ·{" "}
                           {percent(item.payload.share)} of total attribution
                         </span>
                       )}
@@ -409,137 +355,106 @@ export function ResearchEvaluationPanel({
               </BarChart>
             </ChartContainer>
             <p className="text-sm text-muted-foreground">
-              Revenue and opportunity amount dominate primary attribution;
-              amount dominates the fallback. Bars show average absolute
-              contributions in probability percentage points. Tooltip shares
-              normalize each model’s total attribution magnitude; they are not
-              variance explained or causal effects.
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Same {p.shapSample} test opportunities and {p.shapBackground}{" "}
-              training-background opportunities per model. Encoded contributions
-              are grouped before absolute averaging. Correlated product
-              categories and background choice affect attribution;
-              source-specific associations may differ in real buying behaviour.
+              {modelName === "Fallback RF"
+                ? "Opportunity amount and route to market account for approximately 90.2%"
+                : "Previous client revenue and opportunity amount account for approximately 81.5%"}{" "}
+              of total mean absolute attribution. These contributions describe
+              model behaviour, not causal relationships.
             </p>
           </section>
-          <details className="border-t pt-4">
-            <summary className="cursor-pointer text-sm font-semibold">
-              Separate outcome monitoring · application and IBM demonstration
+          <details className="border-t pt-3">
+            <summary className="cursor-pointer text-sm font-medium">
+              Live outcome monitoring
             </summary>
             <div className="mt-4">{children}</div>
           </details>
         </TabsContent>
-        <TabsContent value="optimization" className="mt-4 space-y-6">
+        <TabsContent value="optimization" className="mt-4 space-y-5">
           <section className="space-y-3" aria-labelledby="optimization-summary">
             <h3 id="optimization-summary" className="font-semibold">
-              Synthetic weekly planning evaluation
+              Optimization evaluation
             </h3>
             <p className="text-sm text-muted-foreground">
-              {o.scenarios} simulated weeks · 10–200 candidate activities ·
-              weekly capacities 1–80 hours with completed effort deducted · at
-              most one action per opportunity. Identical pools and remaining
-              capacity were supplied to MCKP and all four greedy rules.
+              Synthetic computational testing of weekly planning quality; these
+              results do not measure actual revenue or salesperson productivity.
             </p>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Check</TableHead>
-                  <TableHead>Result</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow>
-                  <TableCell>Capacity and group feasibility</TableCell>
-                  <TableCell>
-                    {o.feasibleOutputs.toLocaleString()} /{" "}
-                    {o.feasibleOutputs.toLocaleString()} method/scenario outputs
-                    feasible · {o.feasibilityViolations} violations
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>
-                    Independent exhaustive optimality · 1–12 activities
-                  </TableCell>
-                  <TableCell>
-                    {o.optimality.passed} / {o.optimality.tested} instances
-                    matched · {o.optimality.failed} failed
-                  </TableCell>
-                </TableRow>
-                <TableRow>
-                  <TableCell>Separate deterministic test suite</TableCell>
-                  <TableCell>
-                    {o.deterministicTests.passed} named cases passed ·{" "}
-                    {o.deterministicTests.failed} failed ·{" "}
-                    {o.deterministicTests.skipped} skipped
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-            <p className="text-xs text-muted-foreground">
-              Exhaustive instances are distinct from named test-suite cases;
-              coverage was not measured. Optimality checks cover small bounded
-              instances, not every possible workload.
-            </p>
+            <div className="grid gap-3 md:grid-cols-3">
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-xs text-muted-foreground">
+                    Simulated weeks
+                  </p>
+                  <p className="mt-1 text-2xl font-semibold">{o.scenarios}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-xs text-muted-foreground">
+                    Exhaustive optimality
+                  </p>
+                  <p className="mt-1 text-2xl font-semibold">
+                    {o.optimality.passed}/{o.optimality.tested}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    small instances passed
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-xs text-muted-foreground">
+                    Feasibility violations
+                  </p>
+                  <p className="mt-1 text-2xl font-semibold">
+                    {o.feasibilityViolations}
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
           </section>
           <section className="space-y-2" aria-labelledby="greedy-comparison">
             <h3 id="greedy-comparison" className="font-semibold">
-              MCKP improvement over greedy baselines
+              MCKP compared with greedy baselines
             </h3>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Greedy rule</TableHead>
-                  <TableHead>Median relative gain</TableHead>
+                  <TableHead>Greedy baseline</TableHead>
+                  <TableHead>Median improvement</TableHead>
                   <TableHead>MCKP strict wins</TableHead>
-                  <TableHead>Mean gap (USD)</TableHead>
-                  <TableHead>Worst gap (USD)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {o.baselines.map((row) => (
                   <TableRow key={row.method}>
-                    <TableCell className="whitespace-nowrap">
-                      {methodLabels[row.method]}
+                    <TableCell>{methodLabels[row.method]}</TableCell>
+                    <TableCell>
+                      {row.medianImprovementPercent.toFixed(2)}%
                     </TableCell>
                     <TableCell>
-                      {row.medianImprovementPercent.toFixed(3)}%
+                      {((row.strictWins / o.scenarios) * 100).toFixed(1)}% (
+                      {row.strictWins}/{o.scenarios})
                     </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      {row.strictWins}/{o.scenarios} (
-                      {((row.strictWins / o.scenarios) * 100).toFixed(1)}%)
-                    </TableCell>
-                    <TableCell>{usd(row.meanGapUsd)}</TableCell>
-                    <TableCell>{usd(row.worstGapUsd)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
             <p className="text-xs text-muted-foreground">
-              Relative gain = (MCKP − greedy) / greedy × 100, summarized over{" "}
-              {o.definedPercentageCases} positive-baseline scenarios per rule.
-              The {o.zeroDenominatorCases} zero-denominator cases were all ties
-              and are excluded from percentages. Strict-win frequencies and
-              absolute gaps include all {o.scenarios} scenarios. Gaps are
-              probability-weighted planning values in USD.
+              Relative improvements exclude {o.zeroDenominatorCases} cases where
+              the greedy objective was zero; percentages use{" "}
+              {o.definedPercentageCases} positive-baseline cases.
             </p>
             <p className="text-sm text-muted-foreground">
-              MCKP tied weighted value/hour in{" "}
-              {o.baselines.find((row) => row.method === "VALUE_PER_HOUR")?.ties}
-              /{o.scenarios} scenarios and improved its objective in the
-              remaining{" "}
-              {
-                o.baselines.find((row) => row.method === "VALUE_PER_HOUR")
-                  ?.strictWins
-              }
-              . No greedy result exceeded MCKP. The stronger heuristic often
-              matches MCKP, so added benefit depends on the scenario.
+              MCKP matched weighted value/hour in {density?.ties}/{o.scenarios}{" "}
+              scenarios and achieved a better objective in {density?.strictWins}{" "}
+              ({(((density?.strictWins ?? 0) / o.scenarios) * 100).toFixed(1)}
+              %).
             </p>
           </section>
-          <section className="space-y-3" aria-labelledby="runtime">
+          <section className="space-y-2" aria-labelledby="runtime">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h3 id="runtime" className="font-semibold">
-                Measured local runtime
+                Local algorithm runtime
               </h3>
               <Select value={capacity} onValueChange={setCapacity}>
                 <SelectTrigger className="w-48" aria-label="Runtime capacity">
@@ -621,19 +536,9 @@ export function ResearchEvaluationPanel({
               </LineChart>
             </ChartContainer>
             <p className="text-xs text-muted-foreground">
-              Five warm-ups and 30 measured calls per configuration; P95 uses
-              nearest rank. Whole optimizer call includes dynamic programming,
-              reconstruction and four greedy comparisons, excluding database
-              access and model inference. Fixed pools per candidate count; local
-              warm-process measurements on {o.runtimeCpu}, Node {o.runtimeNode}.
-              These are not cloud timings.
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Synthetic computational results describe the declared workload.
-              Probability-weighted value is a planning objective, not realized
-              revenue or a measured increase in salesperson productivity.
-              Follow-up benefits are fixed per opportunity, not estimated causal
-              effects of individual actions.
+              Measured locally with five warm-ups and 30 calls per
+              configuration; results exclude database access and model
+              inference.
             </p>
           </section>
         </TabsContent>
